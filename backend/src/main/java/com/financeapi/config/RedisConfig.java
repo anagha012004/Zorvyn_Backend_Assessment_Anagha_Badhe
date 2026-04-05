@@ -40,16 +40,20 @@ public class RedisConfig {
             serverConfig.setUsername(uri.getUsername());
         }
 
-        LettuceClientConfiguration.LettuceClientConfigurationBuilder builder =
-                LettuceClientConfiguration.builder()
-                        .commandTimeout(Duration.ofSeconds(10));
-
+        LettuceClientConfiguration clientConfig;
         // rediss:// scheme means TLS required
         if (redisUrl.startsWith("rediss://")) {
-            builder = builder.useSsl().disablePeerVerification();
+            clientConfig = LettuceClientConfiguration.builder()
+                    .commandTimeout(Duration.ofSeconds(10))
+                    .useSsl().disablePeerVerification().and()
+                    .build();
+        } else {
+            clientConfig = LettuceClientConfiguration.builder()
+                    .commandTimeout(Duration.ofSeconds(10))
+                    .build();
         }
 
-        return new LettuceConnectionFactory(serverConfig, builder.build());
+        return new LettuceConnectionFactory(serverConfig, clientConfig);
     }
 
     @Bean
