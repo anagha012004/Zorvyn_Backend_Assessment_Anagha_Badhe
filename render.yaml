@@ -35,12 +35,12 @@ services:
     rootDir: frontend
     dockerfilePath: ./Dockerfile
     plan: free
+    dockerBuildArgs:
+      - key: VITE_API_URL
+        sync: false          # set to https://zorvyn-backend.onrender.com after backend deploys
     envVars:
       - key: VITE_API_URL
-        fromService:
-          name: zorvyn-backend
-          type: web
-          property: host
+        sync: false          # set to https://zorvyn-backend.onrender.com after backend deploys
 
 # ── PostgreSQL ────────────────────────────────────────────
 databases:
