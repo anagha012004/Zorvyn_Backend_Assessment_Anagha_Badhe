@@ -3,7 +3,6 @@ services:
   - type: web
     name: zorvyn-backend
     runtime: docker
-    region: singapore
     rootDir: backend
     dockerfilePath: ./Dockerfile
     plan: free
