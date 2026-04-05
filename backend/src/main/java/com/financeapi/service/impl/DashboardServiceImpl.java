@@ -25,6 +25,8 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardSummaryResponse getSummary() {
         BigDecimal income = transactionRepository.sumIncome();
         BigDecimal expenses = transactionRepository.sumExpenses();
+        if (income == null) income = BigDecimal.ZERO;
+        if (expenses == null) expenses = BigDecimal.ZERO;
 
         Map<String, BigDecimal> categoryBreakdown = transactionRepository.sumByCategory().stream()
                 .collect(Collectors.toMap(

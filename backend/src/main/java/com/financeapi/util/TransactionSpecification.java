@@ -23,8 +23,8 @@ public class TransactionSpecification {
             if (search != null && !search.isBlank()) {
                 String pattern = "%" + search.toLowerCase() + "%";
                 predicates.add(cb.or(
-                    cb.like(cb.lower(root.get("notes")), pattern),
-                    cb.like(cb.lower(root.get("category").get("name")), pattern)
+                    cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern),
+                    cb.like(cb.lower(cb.coalesce(root.get("category").get("name"), "")), pattern)
                 ));
             }
             return cb.and(predicates.toArray(new Predicate[0]));

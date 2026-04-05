@@ -30,7 +30,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     BigDecimal sumExpenses();
 
     @Query("SELECT t.category.name, COALESCE(SUM(t.amount), 0) FROM Transaction t " +
-           "WHERE t.deleted = false GROUP BY t.category.name")
+           "WHERE t.deleted = false AND t.category IS NOT NULL GROUP BY t.category.name")
     List<Object[]> sumByCategory();
 
     @Query(value = "SELECT TO_CHAR(date, 'YYYY-MM') as month, COALESCE(SUM(amount), 0) as total, type " +
