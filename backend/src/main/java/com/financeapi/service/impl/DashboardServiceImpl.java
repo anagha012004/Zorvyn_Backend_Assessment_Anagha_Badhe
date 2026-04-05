@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -20,6 +21,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final TransactionRepository transactionRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public DashboardSummaryResponse getSummary() {
         BigDecimal income = transactionRepository.sumIncome();
         BigDecimal expenses = transactionRepository.sumExpenses();
@@ -41,6 +43,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Map<String, Object> getMonthlyTrends() {
         List<Object[]> rows = transactionRepository.monthlyTrends();
         Map<String, Map<String, BigDecimal>> trends = new LinkedHashMap<>();

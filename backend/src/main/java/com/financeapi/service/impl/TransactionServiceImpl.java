@@ -137,11 +137,13 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public TransactionResponse getById(Long id) {
         return TransactionResponse.from(getActive(id));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PagedResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
                                                       LocalDate from, LocalDate to, String search, Pageable pageable) {
         Page<TransactionResponse> page = transactionRepository
@@ -151,6 +153,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     @PreAuthorize("hasRole('ADMIN')")
     public PagedResponse<TransactionResponse> getDeleted(Pageable pageable) {
         return PagedResponse.from(transactionRepository.findByDeletedTrue(pageable).map(TransactionResponse::from));
@@ -168,6 +171,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public AuditHistoryResponse getHistory(Long id) {
         // Verify transaction exists
         transactionRepository.findById(id)
@@ -180,6 +184,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public byte[] exportCsv() {
         List<Transaction> all = transactionRepository.findAll(
                 TransactionSpecification.filter(null, null, null, null));
@@ -201,6 +206,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public byte[] exportExcel() {
         List<Transaction> all = transactionRepository.findAll(
                 TransactionSpecification.filter(null, null, null, null));

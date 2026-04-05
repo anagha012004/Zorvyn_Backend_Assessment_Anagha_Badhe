@@ -27,11 +27,13 @@ public class TransactionResponse {
         r.id = t.getId();
         r.amount = t.getAmount();
         r.type = t.getType();
-        r.categoryName = t.getCategory() != null ? t.getCategory().getName() : null;
         r.date = t.getDate();
         r.notes = t.getNotes();
-        r.createdBy = t.getCreatedBy().getFullName();
         r.createdAt = t.getCreatedAt();
+        try { r.categoryName = t.getCategory() != null ? t.getCategory().getName() : null; }
+        catch (Exception e) { r.categoryName = null; }
+        try { r.createdBy = t.getCreatedBy() != null ? t.getCreatedBy().getFullName() : null; }
+        catch (Exception e) { r.createdBy = null; }
         return r;
     }
 }
