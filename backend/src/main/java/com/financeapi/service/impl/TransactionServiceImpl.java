@@ -20,7 +20,6 @@ import com.opencsv.CSVWriter;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -57,7 +56,6 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "dashboard-summary", allEntries = true)
     public TransactionResponse create(TransactionRequest request, String idempotencyKey, String userEmail) {
         if (idempotencyKey != null) {
             return transactionRepository.findByIdempotencyKey(idempotencyKey)
@@ -118,7 +116,6 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "dashboard-summary", allEntries = true)
     @PreAuthorize("hasAnyRole('ANALYST','ADMIN')")
     public TransactionResponse update(Long id, TransactionRequest request, String userEmail) {
         Transaction t = getActive(id);
@@ -132,7 +129,6 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "dashboard-summary", allEntries = true)
     @PreAuthorize("hasRole('ADMIN')")
     public void delete(Long id, String userEmail) {
         Transaction t = getActive(id);
@@ -162,7 +158,6 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "dashboard-summary", allEntries = true)
     @PreAuthorize("hasRole('ADMIN')")
     public TransactionResponse restore(Long id, String userEmail) {
         Transaction t = transactionRepository.findById(id)

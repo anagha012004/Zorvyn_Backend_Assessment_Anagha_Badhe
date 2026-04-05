@@ -5,7 +5,6 @@ import com.financeapi.dto.response.TransactionResponse;
 import com.financeapi.repository.TransactionRepository;
 import com.financeapi.service.DashboardService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -21,7 +20,6 @@ public class DashboardServiceImpl implements DashboardService {
     private final TransactionRepository transactionRepository;
 
     @Override
-    @Cacheable("dashboard-summary")
     public DashboardSummaryResponse getSummary() {
         BigDecimal income = transactionRepository.sumIncome();
         BigDecimal expenses = transactionRepository.sumExpenses();
@@ -43,7 +41,6 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    @Cacheable("monthly-trends")
     public Map<String, Object> getMonthlyTrends() {
         List<Object[]> rows = transactionRepository.monthlyTrends();
         Map<String, Map<String, BigDecimal>> trends = new LinkedHashMap<>();

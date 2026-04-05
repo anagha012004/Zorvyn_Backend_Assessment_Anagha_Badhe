@@ -47,8 +47,9 @@ public class TransactionSpecification {
                 predicates.add(cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern));
             }
 
-            // Avoid duplicate rows from JOIN when used with pagination
-            if (query != null) {
+            // Only set distinct on the data query, not the count query
+            // Hibernate 6 throws SemanticException if distinct is set on count queries
+            if (query != null && query.getResultType() != Long.class && query.getResultType() != long.class) {
                 query.distinct(true);
             }
 
