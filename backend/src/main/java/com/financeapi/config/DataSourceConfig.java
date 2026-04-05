@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import javax.sql.DataSource;
-import java.net.URI;
 
 @Configuration
 public class DataSourceConfig {
@@ -21,16 +20,25 @@ public class DataSourceConfig {
 
         HikariDataSource ds = new HikariDataSource();
 
-        // Render injects: postgresql://user:pass@host/db
-        // JDBC requires:  jdbc:postgresql://host/db  + separate user/pass
+        // Render injects: postgresql://user:pass@host[:port]/db
+        // JDBC requires:  jdbc:postgresql://host[:port]/db  + separate user/pass
         if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
-            URI uri = URI.create(url.replaceFirst("^postgres(ql)?://", "postgresql://"));
-            String[] info = uri.getUserInfo() != null ? uri.getUserInfo().split(":", 2) : new String[]{};
-            ds.setJdbcUrl("jdbc:postgresql://" + uri.getHost()
-                    + (uri.getPort() != -1 ? ":" + uri.getPort() : "")
-                    + uri.getPath());
-            ds.setUsername(info.length > 0 ? info[0] : username);
-            ds.setPassword(info.length > 1 ? info[1] : password);
+            // Strip scheme
+            String withoutScheme = url.replaceFirst("^postgres(ql)?://", "");
+
+            // Split userinfo from hostpart: "user:pass@host/db"
+            int atIdx = withoutScheme.lastIndexOf('@');
+            String userInfo  = withoutScheme.substring(0, atIdx);
+            String hostAndDb = withoutScheme.substring(atIdx + 1);
+
+            // Split user:pass
+            int colonIdx = userInfo.indexOf(':');
+            String resolvedUser     = colonIdx >= 0 ? userInfo.substring(0, colonIdx) : userInfo;
+            String resolvedPassword = colonIdx >= 0 ? userInfo.substring(colonIdx + 1) : password;
+
+            ds.setJdbcUrl("jdbc:postgresql://" + hostAndDb);
+            ds.setUsername(resolvedUser);
+            ds.setPassword(resolvedPassword);
         } else {
             ds.setJdbcUrl(url);
             ds.setUsername(username);
