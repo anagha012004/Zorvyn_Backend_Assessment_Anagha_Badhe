@@ -22,7 +22,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
 
@@ -39,6 +43,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${jwt.refresh-token-expiry}")
     private long refreshTokenExpiry;
+
+    @Value("${jwt.refresh-token-pepper}")
+    private String refreshTokenPepper;
 
     @Override
     @Transactional
@@ -112,6 +119,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String hashToken(String token) {
-        return Integer.toHexString(token.hashCode());
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest((token + refreshTokenPepper).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }

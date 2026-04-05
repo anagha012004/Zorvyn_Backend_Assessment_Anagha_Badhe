@@ -32,6 +32,7 @@ jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
   access-token-expiry: 900000
   refresh-token-expiry: 604800000
+  refresh-token-pepper: ${JWT_REFRESH_TOKEN_PEPPER:Z0rv7n$P3pp3rK3y!D3f@ult}
 
 springdoc:
   api-docs:
@@ -44,3 +45,8 @@ management:
     web:
       exposure:
         include: health,info,metrics
+
+# Merchant classifier: 'dictionary' (default, no external deps) or 'http' (external API)
+# To use HTTP classifier, also set: merchant.classifier.api-url=https://your-api/classify
+merchant:
+  classifier: ${MERCHANT_CLASSIFIER:dictionary}

@@ -3,65 +3,31 @@ package com.financeapi.service.impl;
 import com.financeapi.domain.MerchantTag;
 import com.financeapi.domain.Transaction;
 import com.financeapi.repository.MerchantTagRepository;
+import com.financeapi.service.MerchantClassifier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class MerchantService {
 
     private final MerchantTagRepository merchantTagRepository;
-
-    // keyword -> canonical merchant name
-    private static final Map<String, String> MERCHANT_MAP = new LinkedHashMap<>();
-    static {
-        MERCHANT_MAP.put("swiggy", "Swiggy");
-        MERCHANT_MAP.put("zomato", "Zomato");
-        MERCHANT_MAP.put("amazon", "Amazon");
-        MERCHANT_MAP.put("flipkart", "Flipkart");
-        MERCHANT_MAP.put("uber", "Uber");
-        MERCHANT_MAP.put("ola", "Ola");
-        MERCHANT_MAP.put("netflix", "Netflix");
-        MERCHANT_MAP.put("spotify", "Spotify");
-        MERCHANT_MAP.put("airtel", "Airtel");
-        MERCHANT_MAP.put("jio", "Jio");
-        MERCHANT_MAP.put("blinkit", "Blinkit");
-        MERCHANT_MAP.put("zepto", "Zepto");
-        MERCHANT_MAP.put("bigbasket", "BigBasket");
-        MERCHANT_MAP.put("dunzo", "Dunzo");
-        MERCHANT_MAP.put("paytm", "Paytm");
-        MERCHANT_MAP.put("phonepe", "PhonePe");
-        MERCHANT_MAP.put("gpay", "Google Pay");
-    }
+    private final MerchantClassifier merchantClassifier;
 
     public void extractAndTag(Transaction transaction) {
-        if (transaction.getNotes() == null) return;
-        String notes = transaction.getNotes().toLowerCase();
-        for (Map.Entry<String, String> entry : MERCHANT_MAP.entrySet()) {
-            if (notes.contains(entry.getKey())) {
-                MerchantTag tag = new MerchantTag();
-                tag.setTransaction(transaction);
-                tag.setMerchantName(entry.getValue());
-                merchantTagRepository.save(tag);
-                return;
-            }
-        }
-        // Fallback: extract first capitalized word sequence as merchant
-        Matcher m = Pattern.compile("\\b([A-Z][a-zA-Z]+(?:\\s[A-Z][a-zA-Z]+)?)\\b")
-                           .matcher(transaction.getNotes());
-        if (m.find()) {
+        merchantClassifier.classify(transaction.getNotes()).ifPresent(name -> {
             MerchantTag tag = new MerchantTag();
             tag.setTransaction(transaction);
-            tag.setMerchantName(m.group(1));
+            tag.setMerchantName(name);
             merchantTagRepository.save(tag);
-        }
+        });
     }
 
     public Optional<MerchantTag> findByTransactionId(Long transactionId) {

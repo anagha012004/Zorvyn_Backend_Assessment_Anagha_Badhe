@@ -15,7 +15,7 @@ public interface TransactionService {
     void delete(Long id, String userEmail);
     TransactionResponse getById(Long id);
     PagedResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
-                                               LocalDate from, LocalDate to, Pageable pageable);
+                                               LocalDate from, LocalDate to, String search, Pageable pageable);
     PagedResponse<TransactionResponse> getDeleted(Pageable pageable);
     TransactionResponse restore(Long id, String userEmail);
     byte[] exportCsv();

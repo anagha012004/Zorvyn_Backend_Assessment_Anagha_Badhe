@@ -141,9 +141,9 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     public PagedResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
-                                                      LocalDate from, LocalDate to, Pageable pageable) {
+                                                      LocalDate from, LocalDate to, String search, Pageable pageable) {
         Page<TransactionResponse> page = transactionRepository
-                .findAll(TransactionSpecification.filter(type, categoryId, from, to), pageable)
+                .findAll(TransactionSpecification.filter(type, categoryId, from, to, search), pageable)
                 .map(TransactionResponse::from);
         return PagedResponse.from(page);
     }

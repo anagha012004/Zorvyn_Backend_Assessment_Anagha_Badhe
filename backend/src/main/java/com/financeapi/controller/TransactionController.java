@@ -60,16 +60,17 @@ public class TransactionController {
     }
 
     @GetMapping
-    @Operation(summary = "List transactions with optional filters and pagination")
+    @Operation(summary = "List transactions with optional filters, full-text search, and pagination")
     public ResponseEntity<PagedResponse<TransactionResponse>> getAll(
             @RequestParam(required = false) TransactionType type,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        return ResponseEntity.ok(transactionService.getAll(type, categoryId, from, to,
+        return ResponseEntity.ok(transactionService.getAll(type, categoryId, from, to, search,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "date"))));
     }
 
