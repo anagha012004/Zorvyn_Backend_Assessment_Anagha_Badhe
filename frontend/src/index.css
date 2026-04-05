@@ -1,0 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Core palette ── */
+  --z-void:        #04060f;
+  --z-base:        #070b18;
+  --z-surface:     #0c1220;
+  --z-card:        #101828;
+  --z-card-hover:  #141f30;
+  --z-elevated:    #192338;
+
+  /* ── Borders ── */
+  --z-border:      #1c2a3e;
+  --z-border-mid:  #243347;
+  --z-border-hi:   #2e4060;
+
+  /* ── Zorvyn brand accent — electric indigo-blue ── */
+  --z-accent:      #6366f1;
+  --z-accent-2:    #818cf8;
+  --z-accent-dim:  rgba(99,102,241,0.12);
+  --z-accent-glow: rgba(99,102,241,0.25);
+  --z-accent-ring: rgba(99,102,241,0.4);
+
+  /* ── Secondary accent — cyan ── */
+  --z-cyan:        #22d3ee;
+  --z-cyan-dim:    rgba(34,211,238,0.1);
+
+  /* ── Semantic ── */
+  --z-green:       #10b981;
+  --z-green-dim:   rgba(16,185,129,0.12);
+  --z-red:         #f43f5e;
+  --z-red-dim:     rgba(244,63,94,0.12);
+  --z-amber:       #f59e0b;
+  --z-amber-dim:   rgba(245,158,11,0.12);
+  --z-purple:      #a855f7;
+  --z-purple-dim:  rgba(168,85,247,0.12);
+
+  /* ── Text ── */
+  --z-text-1:      #f1f5f9;
+  --z-text-2:      #94a3b8;
+  --z-text-3:      #475569;
+  --z-text-4:      #2d3f55;
+
+  /* ── Radius ── */
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  14px;
+  --r-xl:  18px;
+  --r-2xl: 24px;
+
+  /* ── Shadows ── */
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.6);
+  --shadow-accent: 0 0 24px rgba(99,102,241,0.2);
+
+  /* ── Transitions ── */
+  --t-fast: 0.12s ease;
+  --t-mid:  0.2s ease;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--z-base);
+  color: var(--z-text-1);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--z-border-mid); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--z-accent); }
+
+/* ── Base elements ── */
+button { cursor: pointer; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+a { text-decoration: none; color: inherit; }
+code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Global utility classes ── */
+.z-card {
+  background: var(--z-card);
+  border: 1px solid var(--z-border);
+  border-radius: var(--r-lg);
+}
+
+.z-glass {
+  background: rgba(16,24,40,0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--z-border-mid);
+}
+
+/* ── Noise texture overlay ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+/* ── Animated gradient background ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(99,102,241,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(34,211,238,0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Animations ── */
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes pulse   { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes fadeIn  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes glow    { 0%,100% { box-shadow: 0 0 8px rgba(99,102,241,0.3); } 50% { box-shadow: 0 0 20px rgba(99,102,241,0.6); } }
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-in { animation: fadeIn 0.3s ease both; }
