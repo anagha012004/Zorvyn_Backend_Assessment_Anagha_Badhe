@@ -16,9 +16,17 @@ public class JwtUtils {
 
     public JwtUtils(@Value("${jwt.secret}") String secret,
                     @Value("${jwt.access-token-expiry}") long accessTokenExpiry) {
-        byte[] keyBytes = secret.length() >= 64 && secret.matches("[0-9a-fA-F]+")
-                ? hexToBytes(secret)
-                : secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        // Strip surrounding quotes that may come from env var misconfiguration
+        secret = secret.trim().replaceAll("^\"|\"$", "");
+
+        byte[] keyBytes;
+        // Try base64 first (handles secrets generated with openssl rand -base64 32)
+        try {
+            keyBytes = java.util.Base64.getDecoder().decode(secret);
+        } catch (IllegalArgumentException e) {
+            // Fall back to raw UTF-8 bytes
+            keyBytes = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
         if (keyBytes.length < 32)
             throw new IllegalArgumentException("JWT_SECRET must be at least 32 bytes (256 bits)");
         this.key = Keys.hmacShaKeyFor(keyBytes);
@@ -50,14 +58,5 @@ public class JwtUtils {
 
     private Claims parseClaims(String token) {
         return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
-    }
-
-    private byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2)
-            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-                    + Character.digit(hex.charAt(i + 1), 16));
-        return data;
     }
 }
