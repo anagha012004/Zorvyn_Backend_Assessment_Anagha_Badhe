@@ -1,6 +1,6 @@
 # Zorvyn Finance Backend
 
-A production-grade Spring Boot 3 backend for a finance dashboard system with role-based access control, JWT authentication with refresh token rotation, Redis caching, audit logging via AOP, anomaly detection, rate limiting, spending forecasts, budget envelopes, merchant intelligence, velocity scoring, DNA fingerprinting, and CSV/Excel export.
+A production-grade Spring Boot 3 backend for a finance dashboard system with role-based access control, JWT authentication with refresh token rotation, Redis caching, audit logging via AOP, anomaly detection, rate limiting, spending forecasts, budget envelopes, merchant intelligence, velocity scoring, DNA fingerprinting, CSV/Excel/PDF export, bulk import, and email alerts.
 
 ---
 
@@ -68,6 +68,7 @@ The application follows a strict layered architecture:
 | Auth | JWT (JJWT 0.12) + Refresh Token Rotation | Stateless auth with replay attack prevention |
 | API Docs | SpringDoc OpenAPI 3 (Swagger UI) | Auto-generated from code, always in sync |
 | Export | Apache POI (Excel) + OpenCSV + iText 8 | Industry-standard libraries for office and PDF generation |
+| Email | Spring Mail (SMTP / AWS SES) | Async anomaly and high-value transaction alerts |
 | Rate Limiting | Bucket4j | Token bucket algorithm, role-aware limits, no external dependency needed |
 | Build | Maven | Stable, widely supported in CI/CD pipelines |
 | Deployment | Docker + Render + Upstash | Reproducible environments, single-command startup |
@@ -141,7 +142,7 @@ Flyway seeds the admin user on first startup. If the password hash doesn't match
 PGPASSWORD=<db-password> psql -h <external-host> -U <db-user> <db-name> -c \
   "UPDATE users SET password_hash = '\$2a\$10\$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO1GRe/0lzO' WHERE email = 'admin@finance.com';"
 
-# Windows (PowerShell) — use the full psql path if needed
+# Windows (PowerShell)
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" "postgresql://<user>:<password>@<external-host>:5432/<db>" -c "UPDATE users SET password_hash = '$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO1GRe/0lzO' WHERE email = 'admin@finance.com';"
 ```
 
@@ -176,8 +177,18 @@ services:
         value: "true"
       - key: JWT_SECRET
         sync: false          # openssl rand -base64 32
+      - key: JWT_REFRESH_TOKEN_PEPPER
+        sync: false          # openssl rand -base64 32
       - key: FRONTEND_URL
         sync: false          # set after frontend deploys
+      - key: MAIL_USERNAME
+        sync: false          # optional — alerts disabled if blank
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: ALERT_EMAIL_FROM
+        sync: false
+      - key: ALERT_HIGH_VALUE_THRESHOLD
+        value: "10000"
 
   - type: web
     name: zorvyn-frontend
@@ -206,7 +217,7 @@ When a user calls `POST /api/v1/auth/login`:
 2. `AuthServiceImpl` calls Spring's `AuthenticationManager`, which internally calls `UserDetailsServiceImpl`
 3. `UserDetailsServiceImpl` loads the user from PostgreSQL, checks `is_active`, and builds a `UserDetails` object with `ROLE_` prefixed authorities
 4. If authentication passes, an **access token** (JWT, 15 min TTL) and a **refresh token** (UUID, 7 day TTL) are issued
-5. The refresh token is hashed and stored in the `refresh_tokens` table — never stored in plaintext
+5. The refresh token is SHA-256 hashed with a pepper and stored in the `refresh_tokens` table — never stored in plaintext
 6. On every `POST /auth/refresh`, the old token is revoked and a new pair is issued (rotation prevents replay attacks)
 
 Every subsequent request passes through `JwtAuthFilter`, which:
@@ -225,8 +236,8 @@ Three roles exist: `VIEWER`, `ANALYST`, `ADMIN`.
 | Action | Minimum Role |
 |---|---|
 | Read transactions, dashboard, export | VIEWER |
-| Create, update transactions | ANALYST |
-| Delete, restore, manage users, budgets | ADMIN |
+| Create, update transactions, bulk import | ANALYST |
+| Delete, restore, manage users, budgets, categories | ADMIN |
 
 ### 4.3 Transaction Lifecycle
 
@@ -240,8 +251,9 @@ When `POST /api/v1/transactions` is called:
 6. **Velocity scoring** — EMA score (0–100) comparing today's spend to 7-day rolling average, returned in `X-Velocity-Score`
 7. **Merchant tagging** — notes scanned for known merchant keywords; `MerchantTag` record saved
 8. **SSE broadcast** — new transaction pushed to all connected clients
-9. **Cache eviction** — `dashboard-summary` Redis cache evicted
-10. **Audit log** — `AuditAspect` asynchronously writes an `AuditLog` record
+9. **Email alerts** — anomaly alert and high-value alert sent asynchronously via Spring Mail
+10. **Cache eviction** — `dashboard-summary` Redis cache evicted
+11. **Audit log** — `AuditAspect` asynchronously writes an `AuditLog` record
 
 ### 4.4 Dashboard & Caching
 
@@ -275,7 +287,15 @@ On every transaction creation, `VelocityService` computes a velocity score (0–
 
 ### 4.10 Transaction Simulator
 
-`TransactionSimulator` fires every **8 hours** and creates a realistic random transaction for a random active user, exercising the full transaction pipeline including anomaly detection, velocity scoring, merchant tagging, SSE broadcast, and audit logging.
+`TransactionSimulator` fires every **8 hours** and creates a realistic random transaction for a random active user, exercising the full transaction pipeline including anomaly detection, velocity scoring, merchant tagging, SSE broadcast, email alerts, and audit logging.
+
+### 4.11 Bulk Import
+
+`POST /api/v1/transactions/import/csv` and `/import/json` accept a multipart file upload. All rows are validated and saved inside a single `@Transactional` boundary — any validation error rolls back the entire import, ensuring no partial state is written to the database.
+
+### 4.12 PDF Export
+
+`GET /api/v1/transactions/export?format=pdf&from=2025-01-01&to=2025-06-30` generates a financial statement PDF using iText 8, including an income/expense summary and a full transaction table for the requested date range.
 
 ---
 
@@ -318,6 +338,19 @@ cd frontend && npm install && npm run dev
 ```
 
 Frontend: `http://localhost:3000`
+
+### Environment Variables
+
+| Key | Required | Description |
+|---|---|---|
+| `JWT_SECRET` | Yes | Random string ≥ 32 chars — `openssl rand -base64 32` |
+| `JWT_REFRESH_TOKEN_PEPPER` | Yes | Random string ≥ 32 chars — `openssl rand -base64 32` |
+| `SPRING_DATA_REDIS_URL` | Yes | Redis connection URL |
+| `FRONTEND_URL` | Yes | CORS allowed origin for the frontend |
+| `MAIL_USERNAME` | No | SMTP user — email alerts disabled if blank |
+| `MAIL_PASSWORD` | No | SMTP password or Gmail app password |
+| `ALERT_EMAIL_FROM` | No | Sender address for alert emails |
+| `ALERT_HIGH_VALUE_THRESHOLD` | No | INR threshold for high-value alerts (default `10000`) |
 
 ### Clean slate
 
@@ -434,19 +467,28 @@ src/main/java/com/financeapi/
 ├── repository/   ← Spring Data JPA repositories
 ├── service/      ← Service interfaces + implementations
 │   └── impl/     ← AuthServiceImpl, TransactionServiceImpl, DashboardServiceImpl,
-│                   BudgetService, ForecastService, MerchantService,
-│                   VelocityService, DnaFingerprintService, SseEmitterRegistry
-├── controller/   ← AuthController, TransactionController, DashboardController,
-│                   UserController, BudgetController, ForecastController, MerchantController
+│                   CategoryServiceImpl, BudgetService, ForecastService,
+│                   MerchantService, VelocityService, DnaFingerprintService,
+│                   PdfExportService, EmailAlertService, BulkImportService,
+│                   SseEmitterRegistry
+├── controller/   ← AuthController, TransactionController, BulkImportController,
+│                   CategoryController, DashboardController, UserController,
+│                   BudgetController, ForecastController, MerchantController
 ├── dto/          ← Request/Response DTOs
 ├── security/     ← JwtUtils, JwtAuthFilter, UserDetailsServiceImpl
 ├── exception/    ← Custom exceptions + GlobalExceptionHandler
 ├── audit/        ← AuditAspect (AOP)
 └── util/         ← TransactionSpecification
 
-frontend/         ← Vite + React frontend (Zorvyn theme)
-render.yaml       ← Render Blueprint (backend + frontend + postgres)
-docker-compose.yml← Local development stack
+src/main/resources/db/migration/
+├── V1__init_schema.sql       ← Schema + seed categories + admin user
+├── V2__novelty_features.sql  ← DNA, budgets, merchant tags, velocity
+└── V3__seed_default_users.sql← Analyst and viewer seed users
+
+frontend/          ← Vite + React frontend (Zorvyn theme)
+render.yaml        ← Render Blueprint (backend + frontend + postgres)
+docker-compose.yml ← Local development stack
+.env.example       ← Environment variable template
 ```
 
 ---
@@ -460,7 +502,7 @@ Chosen over Node.js or Python for strict type safety and compile-time error dete
 Finance data is inherently relational — transactions belong to categories, users have roles, budgets reference categories. PostgreSQL's ACID compliance and constraint enforcement made it the right fit over H2. The trade-off is that reviewers need a running Postgres instance, addressed via `docker-compose.yml` for one-command local startup. Flyway ensures schema state is always reproducible and auditable.
 
 ### Security — JWT with Refresh Token Rotation + RBAC
-Stateless JWT authentication (15-minute access tokens) with refresh token rotation rather than session-based auth. Rotation adds complexity (SHA-256 hashed tokens stored in `refresh_tokens`, old token revoked on every refresh) but prevents replay attacks. RBAC is enforced at the service layer via `@PreAuthorize` — not just controllers — so even internal calls respect role boundaries. OAuth2/OIDC was intentionally skipped; it would add infrastructure complexity without demonstrating additional engineering judgment within this assessment's scope.
+Stateless JWT authentication (15-minute access tokens) with refresh token rotation rather than session-based auth. Rotation adds complexity (SHA-256 hashed tokens with a pepper stored in `refresh_tokens`, old token revoked on every refresh) but prevents replay attacks. RBAC is enforced at the service layer via `@PreAuthorize` — not just controllers — so even internal calls respect role boundaries. OAuth2/OIDC was intentionally skipped; it would add infrastructure complexity without demonstrating additional engineering judgment within this assessment's scope.
 
 ### Data Processing — SQL aggregations + Java service layer
 Dashboard aggregations (total income, expenses, category breakdowns) are pushed down to JPQL queries — summing rows in the database is orders of magnitude faster than loading them into the JVM. Complex logic — anomaly detection (3σ), velocity scoring (EMA), spending forecasts (exponential smoothing), DNA fingerprinting (SHA-256) — lives in the Java service layer where it is unit-testable with Mockito and not coupled to a SQL dialect. Redis caches the dashboard summary with a 5-minute TTL.
@@ -486,4 +528,3 @@ Dashboard aggregations (total income, expenses, category breakdowns) are pushed 
 
 - **OAuth2/OIDC** (Keycloak or Cognito) for federated identity in a multi-tenant setup
 - **Redis-backed rate limiting** via Bucket4j `RedisProxyManager` for horizontal scale
-- **Category management endpoint** (`POST /api/v1/categories`) — currently seeded via Flyway only
