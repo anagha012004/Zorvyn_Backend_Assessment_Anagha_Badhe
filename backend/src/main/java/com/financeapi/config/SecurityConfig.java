@@ -42,25 +42,16 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                    // Public endpoints
                     .requestMatchers("/api/v1/auth/**").permitAll()
-                    .requestMatchers(
-                            "/swagger-ui/**",
-                            "/swagger-ui.html",
-                            "/v3/api-docs/**",
-                            "/api-docs/**"
-                    ).permitAll()
+                    .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
+                                     "/v3/api-docs/**", "/api-docs/**").permitAll()
                     .requestMatchers("/actuator/health").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/v1/**")
-                            .hasAnyRole("VIEWER", "ANALYST", "ADMIN")
-                    .requestMatchers(HttpMethod.POST,
-                            "/api/v1/transactions",
-                            "/api/v1/transactions/",
-                            "/api/v1/transactions/import/**"
-                    ).hasAnyRole("ANALYST", "ADMIN")
-                    .requestMatchers(HttpMethod.PUT, "/api/v1/transactions/**")
-                            .hasAnyRole("ANALYST", "ADMIN")
-                    .anyRequest().hasAnyRole("ADMIN")
-                 )
+                    // SSE stream — allow token via query param (browsers can't set headers for EventSource)
+                    .requestMatchers(HttpMethod.GET, "/api/v1/transactions/stream").permitAll()
+                    // Everything else requires a valid JWT — fine-grained role checks are on @PreAuthorize
+                    .anyRequest().authenticated()
+                )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(rateLimitFilter, JwtAuthFilter.class)
@@ -71,16 +62,17 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         String frontendUrl = System.getenv("FRONTEND_URL");
-        List<String> origins = new java.util.ArrayList<>(List.of("http://localhost:3000", "http://localhost:5173"));
+        List<String> origins = new java.util.ArrayList<>(
+                List.of("http://localhost:3000", "http://localhost:5173"));
         if (frontendUrl != null && !frontendUrl.isBlank()) origins.add(frontendUrl);
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of(
                 "X-Anomaly-Warning", "X-Anomaly-Detail",
                 "X-Velocity-Score", "X-RateLimit-Remaining",
                 "Authorization"
         ));
-        config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

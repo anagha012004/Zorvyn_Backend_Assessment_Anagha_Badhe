@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,6 +23,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Cacheable("dashboard-summary")
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public DashboardSummaryResponse getSummary() {
         BigDecimal income = transactionRepository.sumIncome();
         BigDecimal expenses = transactionRepository.sumExpenses();
@@ -44,6 +46,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Cacheable("monthly-trends")
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public Map<String, Object> getMonthlyTrends() {
         List<Object[]> rows = transactionRepository.monthlyTrends();
         Map<String, Map<String, BigDecimal>> trends = new LinkedHashMap<>();

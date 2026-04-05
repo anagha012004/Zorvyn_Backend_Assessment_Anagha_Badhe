@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @Service
 @RequiredArgsConstructor
 public class BudgetService {
@@ -49,6 +51,7 @@ public class BudgetService {
         return budgetRepository.save(budget);
     }
 
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public BudgetStatusResponse getStatus(String monthYear) {
         List<Budget> budgets = budgetRepository.findByMonthYear(monthYear);
         YearMonth ym = YearMonth.parse(monthYear);

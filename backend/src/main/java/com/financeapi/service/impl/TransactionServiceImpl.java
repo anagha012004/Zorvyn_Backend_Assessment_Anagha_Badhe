@@ -141,11 +141,13 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public TransactionResponse getById(Long id) {
         return TransactionResponse.from(getActive(id));
     }
 
     @Override
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public PagedResponse<TransactionResponse> getAll(TransactionType type, Long categoryId,
                                                       LocalDate from, LocalDate to, String search, Pageable pageable) {
         Page<TransactionResponse> page = transactionRepository
@@ -173,6 +175,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public AuditHistoryResponse getHistory(Long id) {
         // Verify transaction exists
         transactionRepository.findById(id)
@@ -185,6 +188,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public byte[] exportCsv() {
         List<Transaction> all = transactionRepository.findAll(
                 TransactionSpecification.filter(null, null, null, null));
@@ -206,6 +210,7 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     @Override
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public byte[] exportExcel() {
         List<Transaction> all = transactionRepository.findAll(
                 TransactionSpecification.filter(null, null, null, null));
