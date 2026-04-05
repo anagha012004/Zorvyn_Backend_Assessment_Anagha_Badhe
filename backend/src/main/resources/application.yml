@@ -15,6 +15,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/financedb}
+    user: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
   data:
     redis:
       url: ${SPRING_DATA_REDIS_URL:redis://localhost:6379}
