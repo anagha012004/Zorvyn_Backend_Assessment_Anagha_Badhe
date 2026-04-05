@@ -5,7 +5,6 @@ import com.financeapi.domain.Transaction;
 import com.financeapi.repository.MerchantTagRepository;
 import com.financeapi.service.MerchantClassifier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -35,7 +34,6 @@ public class MerchantService {
         return merchantTagRepository.findByTransactionId(transactionId);
     }
 
-    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public List<Map<String, Object>> getTopMerchants(String period) {
         LocalDate from = "monthly".equalsIgnoreCase(period)
                 ? LocalDate.now().withDayOfMonth(1)

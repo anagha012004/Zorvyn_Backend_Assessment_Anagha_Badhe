@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ public class BudgetController {
     private final BudgetService budgetService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create or update a monthly budget envelope (ADMIN only)")
     public ResponseEntity<Void> createBudget(
             @Valid @RequestBody BudgetRequest request,
@@ -33,6 +35,7 @@ public class BudgetController {
     }
 
     @GetMapping("/status")
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     @Operation(summary = "Real-time budget envelope status with projected overage")
     public ResponseEntity<BudgetStatusResponse> getStatus(
             @RequestParam(required = false) String monthYear) {

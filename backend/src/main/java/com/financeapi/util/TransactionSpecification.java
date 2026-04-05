@@ -1,9 +1,7 @@
 package com.financeapi.util;
 
-import com.financeapi.domain.Category;
 import com.financeapi.domain.Transaction;
 import com.financeapi.domain.Transaction.TransactionType;
-import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -17,27 +15,47 @@ public class TransactionSpecification {
     public static Specification<Transaction> filter(TransactionType type, Long categoryId,
                                                      LocalDate from, LocalDate to, String search) {
         return (root, query, cb) -> {
-            // Always LEFT JOIN so transactions without a category are included
-            Join<Transaction, Category> categoryJoin = root.join("category", JoinType.LEFT);
-
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.isFalse(root.get("deleted")));
-            if (type != null) predicates.add(cb.equal(root.get("type"), type));
-            if (categoryId != null) predicates.add(cb.equal(categoryJoin.get("id"), categoryId));
-            if (from != null) predicates.add(cb.greaterThanOrEqualTo(root.get("date"), from));
-            if (to != null) predicates.add(cb.lessThanOrEqualTo(root.get("date"), to));
-            if (search != null && !search.isBlank()) {
-                String pattern = "%" + search.toLowerCase() + "%";
-                predicates.add(cb.or(
-                    cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern),
-                    cb.like(cb.lower(cb.coalesce(categoryJoin.get("name"), "")), pattern)
-                ));
+
+            if (type != null) {
+                predicates.add(cb.equal(root.get("type"), type));
             }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("date"), from));
+            }
+            if (to != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("date"), to));
+            }
+
+            // Only join category when we actually need to filter or search by it
+            if (categoryId != null || (search != null && !search.isBlank())) {
+                var categoryJoin = root.join("category", JoinType.LEFT);
+                if (categoryId != null) {
+                    predicates.add(cb.equal(categoryJoin.get("id"), categoryId));
+                }
+                if (search != null && !search.isBlank()) {
+                    String pattern = "%" + search.toLowerCase() + "%";
+                    predicates.add(cb.or(
+                        cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern),
+                        cb.like(cb.lower(cb.coalesce(categoryJoin.get("name"), "")), pattern)
+                    ));
+                }
+            } else if (search != null && !search.isBlank()) {
+                // search on notes only when no category join needed
+                String pattern = "%" + search.toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(cb.coalesce(root.get("notes"), "")), pattern));
+            }
+
+            // Avoid duplicate rows from JOIN when used with pagination
+            if (query != null) {
+                query.distinct(true);
+            }
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 
-    // Overload for callers that don't pass search (export, history, etc.)
     public static Specification<Transaction> filter(TransactionType type, Long categoryId,
                                                      LocalDate from, LocalDate to) {
         return filter(type, categoryId, from, to, null);

@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ public class ForecastController {
     private final ForecastService forecastService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     @Operation(summary = "Projected daily spend per category using exponential smoothing (α=0.3)")
     public ResponseEntity<ForecastResponse> getForecast(
             @RequestParam(defaultValue = "30") int days,

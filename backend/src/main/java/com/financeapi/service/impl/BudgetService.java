@@ -51,7 +51,6 @@ public class BudgetService {
         return budgetRepository.save(budget);
     }
 
-    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public BudgetStatusResponse getStatus(String monthYear) {
         List<Budget> budgets = budgetRepository.findByMonthYear(monthYear);
         YearMonth ym = YearMonth.parse(monthYear);
@@ -63,7 +62,9 @@ public class BudgetService {
 
         List<EnvelopeStatus> envelopes = budgets.stream().map(b -> {
             BigDecimal spent = Optional.ofNullable(budgetRepository.sumSpendByCategoryAndMonth(
-                    b.getCategory().getId(), monthYear)).orElse(BigDecimal.ZERO);
+                    b.getCategory().getId(), monthYear))
+                    .map(v -> v instanceof BigDecimal bd ? bd : new BigDecimal(v.toString()))
+                    .orElse(BigDecimal.ZERO);
             double pct = b.getAmountLimit().compareTo(BigDecimal.ZERO) == 0 ? 0
                     : spent.divide(b.getAmountLimit(), 4, RoundingMode.HALF_UP)
                            .multiply(BigDecimal.valueOf(100)).doubleValue();

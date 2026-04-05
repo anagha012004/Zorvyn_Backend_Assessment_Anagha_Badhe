@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -23,7 +22,6 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Cacheable("dashboard-summary")
-    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public DashboardSummaryResponse getSummary() {
         BigDecimal income = transactionRepository.sumIncome();
         BigDecimal expenses = transactionRepository.sumExpenses();
@@ -32,8 +30,8 @@ public class DashboardServiceImpl implements DashboardService {
 
         Map<String, BigDecimal> categoryBreakdown = transactionRepository.sumByCategory().stream()
                 .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> (BigDecimal) row[1],
+                        row -> row[0] != null ? row[0].toString() : "Unknown",
+                        row -> row[1] instanceof BigDecimal bd ? bd : new BigDecimal(row[1].toString()),
                         (a, b) -> a, LinkedHashMap::new));
 
         List<TransactionResponse> recent = transactionRepository
@@ -46,7 +44,6 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     @Cacheable("monthly-trends")
-    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public Map<String, Object> getMonthlyTrends() {
         List<Object[]> rows = transactionRepository.monthlyTrends();
         Map<String, Map<String, BigDecimal>> trends = new LinkedHashMap<>();

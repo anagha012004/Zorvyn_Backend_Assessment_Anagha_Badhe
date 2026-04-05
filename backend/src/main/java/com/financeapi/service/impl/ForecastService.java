@@ -6,7 +6,6 @@ import com.financeapi.repository.CategoryRepository;
 import com.financeapi.repository.TransactionRepository;
 import com.financeapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -24,7 +23,6 @@ public class ForecastService {
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
 
-    @PreAuthorize("hasAnyRole('VIEWER','ANALYST','ADMIN')")
     public ForecastResponse forecast(String userEmail, int days) {
         Long userId = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userEmail))
