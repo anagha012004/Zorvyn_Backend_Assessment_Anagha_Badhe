@@ -10,7 +10,7 @@ services:
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
           name: zorvyn-postgres
-          property: connectionString
+          property: jdbcConnectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: zorvyn-postgres
