@@ -156,7 +156,8 @@ export default function Dashboard() {
     load()
     // SSE live feed
     const token = localStorage.getItem('accessToken')
-    const es = new EventSource(`/api/v1/transactions/stream?token=${token}`)
+    const base = import.meta.env.VITE_API_URL || ''
+    const es = new EventSource(`${base}/api/v1/transactions/stream?token=${token}`)
     esRef.current = es
     es.addEventListener('transaction', e => {
       try {

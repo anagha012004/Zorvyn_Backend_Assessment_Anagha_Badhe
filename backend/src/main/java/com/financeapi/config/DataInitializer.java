@@ -41,6 +41,7 @@ public class DataInitializer {
     @Bean
     public ApplicationRunner seedData() {
         return args -> {
+            evictCaches();  // flush stale Redis entries first, before any cache read
             fixAdminPassword();
             seedUser("analyst@finance.com", "Alice Analyst", Role.RoleName.ANALYST);
             seedUser("viewer@finance.com",  "Bob Viewer",    Role.RoleName.VIEWER);
