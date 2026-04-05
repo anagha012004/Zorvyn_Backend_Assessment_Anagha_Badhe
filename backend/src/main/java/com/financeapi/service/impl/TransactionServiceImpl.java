@@ -49,6 +49,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final DnaFingerprintService dnaFingerprintService;
     private final MerchantService merchantService;
     private final SseEmitterRegistry sseEmitterRegistry;
+    private final EmailAlertService emailAlertService;
 
     // Stored in ThreadLocal so the controller can read it for response headers
     public static final ThreadLocal<String> ANOMALY_WARNING = new ThreadLocal<>();
@@ -106,6 +107,11 @@ public class TransactionServiceImpl implements TransactionService {
 
         // SSE broadcast
         sseEmitterRegistry.broadcast(response);
+
+        // Email alerts
+        String anomalyDetail = ANOMALY_WARNING.get();
+        if (anomalyDetail != null) emailAlertService.sendAnomalyAlert(user.getEmail(), saved, anomalyDetail);
+        emailAlertService.sendHighValueAlert(user.getEmail(), saved);
 
         return response;
     }

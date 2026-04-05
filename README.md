@@ -67,7 +67,7 @@ The application follows a strict layered architecture:
 | Cache | Redis via Spring Cache (Upstash) | Sub-millisecond reads for dashboard aggregations; TTL-based invalidation |
 | Auth | JWT (JJWT 0.12) + Refresh Token Rotation | Stateless auth with replay attack prevention |
 | API Docs | SpringDoc OpenAPI 3 (Swagger UI) | Auto-generated from code, always in sync |
-| Export | Apache POI (Excel) + OpenCSV | Industry-standard libraries for office format generation |
+| Export | Apache POI (Excel) + OpenCSV + iText 8 | Industry-standard libraries for office and PDF generation |
 | Rate Limiting | Bucket4j | Token bucket algorithm, role-aware limits, no external dependency needed |
 | Build | Maven | Stable, widely supported in CI/CD pipelines |
 | Deployment | Docker + Render + Upstash | Reproducible environments, single-command startup |
@@ -113,7 +113,8 @@ After the blueprint creates the services, set these manually in the Render dashb
 |---|---|
 | `SPRING_DATA_REDIS_URL` | `rediss://default:<password>@<host>.upstash.io:6379` |
 | `SPRING_DATA_REDIS_SSL` | `true` |
-| `JWT_SECRET` | Any random string ≥ 32 chars (run `openssl rand -base64 32`) |
+| `JWT_SECRET` | `openssl rand -base64 32` |
+| `JWT_REFRESH_TOKEN_PEPPER` | `openssl rand -base64 32` |
 | `FRONTEND_URL` | `https://zorvyn-frontend-<slug>.onrender.com` |
 | `SPRING_DATASOURCE_URL` | Use the **external** Postgres URL from Render (see note below) |
 
@@ -280,6 +281,13 @@ On every transaction creation, `VelocityService` computes a velocity score (0–
 
 ```bash
 cd "path/to/Zorvyn_Backend_Assessment_Anagha_Badhe"
+
+# 1. Copy the env template and fill in your secrets
+cp .env.example .env
+# Edit .env: set JWT_SECRET and JWT_REFRESH_TOKEN_PEPPER
+# Generate values with: openssl rand -base64 32
+
+# 2. Start everything
 docker-compose up --build
 ```
 
@@ -342,6 +350,17 @@ Swagger UI: `https://zorvyn-backend-tyi6.onrender.com/swagger-ui/index.html`
 | GET | `/stream` | VIEWER+ | Live SSE feed |
 | GET | `/export?format=csv` | VIEWER+ | Export CSV |
 | GET | `/export?format=excel` | VIEWER+ | Export Excel |
+| GET | `/export?format=pdf&from=2025-01-01&to=2025-06-30` | VIEWER+ | Export PDF financial statement |
+| POST | `/import/csv` | ANALYST+ | Bulk import from CSV (rolls back on any error) |
+| POST | `/import/json` | ANALYST+ | Bulk import from JSON array (rolls back on any error) |
+
+### Categories — `/api/v1/categories`
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| GET | `/` | VIEWER+ | List all categories |
+| POST | `/` | ADMIN | Create a category |
+| PUT | `/{id}` | ADMIN | Update a category |
+| DELETE | `/{id}` | ADMIN | Delete a category |
 
 ### Dashboard — `/api/v1/dashboard`
 | Method | Endpoint | Role | Description |
@@ -396,6 +415,7 @@ mvn test
 | `TransactionServiceTest` | Unit (Mockito) | Create, idempotency, soft delete, restore |
 | `TransactionControllerTest` | Integration (MockMvc) | HTTP layer, role enforcement |
 | `TransactionRepositoryTest` | Integration (Testcontainers) | Real PostgreSQL queries |
+| `AuthRefreshIntegrationTest` | Integration (Testcontainers) | Refresh token rotation, logout revocation |
 
 ---
 
@@ -427,11 +447,39 @@ docker-compose.yml← Local development stack
 
 ---
 
-## 9. Known Limitations & Future Improvements
+## 9. Technical Decisions & Trade-offs
 
-- **Rate limit state is in-memory**: In a horizontally scaled deployment, buckets should be stored in Redis using Bucket4j's `RedisProxyManager`
-- **Refresh token hash is weak**: `hashCode()` is used for simplicity. Production should use SHA-256 with a pepper
-- **No email verification**: Registered users are immediately active
-- **Render free tier cold starts**: Services spin down after 15 minutes of inactivity; first request takes 30–60 seconds
-- **Merchant dictionary is static**: A production system would use a merchant classification API or ML model
-- **Category management**: Categories are seeded via Flyway; a `POST /categories` endpoint for admins would be a natural next addition
+### Framework & Language — Spring Boot 3 + Java 17
+Chosen over Node.js or Python for strict type safety and compile-time error detection — a mistyped field in a transaction calculation is caught at build time, not at runtime in production. Spring's ecosystem provides Security, Data JPA, Cache, and AOP out of the box without unvetted third-party libraries. The layered Controller → Service → Repository architecture keeps concerns separated: controllers handle only HTTP, all business rules live in services secured with `@PreAuthorize`, and repositories are pure data access.
+
+### Database — PostgreSQL with Flyway
+Finance data is inherently relational — transactions belong to categories, users have roles, budgets reference categories. PostgreSQL's ACID compliance and constraint enforcement made it the right fit over H2. The trade-off is that reviewers need a running Postgres instance, addressed via `docker-compose.yml` for one-command local startup. Flyway ensures schema state is always reproducible and auditable.
+
+### Security — JWT with Refresh Token Rotation + RBAC
+Stateless JWT authentication (15-minute access tokens) with refresh token rotation rather than session-based auth. Rotation adds complexity (SHA-256 hashed tokens stored in `refresh_tokens`, old token revoked on every refresh) but prevents replay attacks. RBAC is enforced at the service layer via `@PreAuthorize` — not just controllers — so even internal calls respect role boundaries. OAuth2/OIDC was intentionally skipped; it would add infrastructure complexity without demonstrating additional engineering judgment within this assessment's scope.
+
+### Data Processing — SQL aggregations + Java service layer
+Dashboard aggregations (total income, expenses, category breakdowns) are pushed down to JPQL queries — summing rows in the database is orders of magnitude faster than loading them into the JVM. Complex logic — anomaly detection (3σ), velocity scoring (EMA), spending forecasts (exponential smoothing), DNA fingerprinting (SHA-256) — lives in the Java service layer where it is unit-testable with Mockito and not coupled to a SQL dialect. Redis caches the dashboard summary with a 5-minute TTL.
+
+### Error Handling & Validation
+`@RestControllerAdvice` centralises all error responses into a consistent JSON shape. `@Valid` on request DTOs catches constraint violations before they reach the service layer, returning field-level messages like `"amount: must be greater than 0"` rather than a generic 500 — making the API self-documenting for the frontend team.
+
+---
+
+## 10. Known Limitations
+
+- **Rate limit state is in-memory** — breaks under horizontal scaling; production fix is Bucket4j's `RedisProxyManager`
+- **Single currency** — all amounts are assumed to be in INR; no multi-currency conversion
+- **Dashboard trends computed on-the-fly** — for millions of records, a materialized view or pre-computed reporting table would be needed
+- **Merchant classification is a static dictionary** — a production system would use a merchant classification API or ML model
+- **No email verification** — registered users are immediately active
+- **Render free tier cold starts** — services spin down after 15 minutes of inactivity; first request takes 30–60 seconds
+- **Search is JPQL `LIKE`** — chosen over Elasticsearch to avoid an external cluster dependency; sufficient for this assessment's scale
+
+---
+
+## 11. Future Improvements
+
+- **OAuth2/OIDC** (Keycloak or Cognito) for federated identity in a multi-tenant setup
+- **Redis-backed rate limiting** via Bucket4j `RedisProxyManager` for horizontal scale
+- **Category management endpoint** (`POST /api/v1/categories`) — currently seeded via Flyway only

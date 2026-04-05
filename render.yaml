@@ -24,7 +24,9 @@ services:
       - key: SPRING_DATA_REDIS_SSL
         value: "true"
       - key: JWT_SECRET
-        sync: false          # set manually: any random string >= 32 chars (e.g. openssl rand -base64 32)
+        sync: false          # set manually: openssl rand -base64 32
+      - key: JWT_REFRESH_TOKEN_PEPPER
+        sync: false          # set manually: openssl rand -base64 32
       - key: FRONTEND_URL
         sync: false          # set after frontend is deployed
 

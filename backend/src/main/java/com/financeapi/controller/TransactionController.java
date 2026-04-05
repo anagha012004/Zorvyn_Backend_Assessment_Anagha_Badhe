@@ -6,6 +6,7 @@ import com.financeapi.dto.response.AuditHistoryResponse;
 import com.financeapi.dto.response.PagedResponse;
 import com.financeapi.dto.response.TransactionResponse;
 import com.financeapi.service.TransactionService;
+import com.financeapi.service.impl.PdfExportService;
 import com.financeapi.service.impl.SseEmitterRegistry;
 import com.financeapi.service.impl.TransactionServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +33,7 @@ public class TransactionController {
 
     private final TransactionService transactionService;
     private final SseEmitterRegistry sseEmitterRegistry;
+    private final PdfExportService pdfExportService;
 
     @PostMapping
     @Operation(summary = "Create a transaction (supports Idempotency-Key header)")
@@ -123,14 +125,23 @@ public class TransactionController {
     }
 
     @GetMapping("/export")
-    @Operation(summary = "Export transactions as CSV or Excel")
-    public ResponseEntity<byte[]> export(@RequestParam(defaultValue = "csv") String format) {
+    @Operation(summary = "Export transactions as CSV, Excel, or PDF")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(defaultValue = "csv") String format,
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to) {
         if ("excel".equalsIgnoreCase(format)) {
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=transactions.xlsx")
                     .contentType(MediaType.parseMediaType(
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                     .body(transactionService.exportExcel());
+        }
+        if ("pdf".equalsIgnoreCase(format)) {
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=statement.pdf")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdfExportService.exportStatement(from, to));
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=transactions.csv")

@@ -24,6 +24,14 @@ spring:
     type: redis
     redis:
       time-to-live: 300000
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 server:
   port: ${PORT:8080}
@@ -46,7 +54,11 @@ management:
       exposure:
         include: health,info,metrics
 
+alerts:
+  email:
+    from: ${ALERT_EMAIL_FROM:noreply@zorvyn.finance}
+    high-value-threshold: ${ALERT_HIGH_VALUE_THRESHOLD:10000}
+
 # Merchant classifier: 'dictionary' (default, no external deps) or 'http' (external API)
-# To use HTTP classifier, also set: merchant.classifier.api-url=https://your-api/classify
 merchant:
   classifier: ${MERCHANT_CLASSIFIER:dictionary}

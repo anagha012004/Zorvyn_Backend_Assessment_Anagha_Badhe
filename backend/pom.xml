@@ -104,6 +104,20 @@
             <version>${bucket4j.version}</version>
         </dependency>
 
+        <!-- PDF Export -->
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>itext-core</artifactId>
+            <version>8.0.4</version>
+            <type>pom</type>
+        </dependency>
+
+        <!-- Email Alerts -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- CSV/Excel Export -->
         <dependency>
             <groupId>org.apache.poi</groupId>
