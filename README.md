@@ -117,6 +117,10 @@ After the blueprint creates the services, set these manually in the Render dashb
 | `JWT_REFRESH_TOKEN_PEPPER` | `openssl rand -base64 32` |
 | `FRONTEND_URL` | `https://zorvyn-frontend-<slug>.onrender.com` |
 | `SPRING_DATASOURCE_URL` | Use the **external** Postgres URL from Render (see note below) |
+| `MAIL_USERNAME` | Gmail address or SES SMTP user (optional — alerts disabled if blank) |
+| `MAIL_PASSWORD` | Gmail app password or SES SMTP password |
+| `ALERT_EMAIL_FROM` | Sender address e.g. `noreply@yourdomain.com` |
+| `ALERT_HIGH_VALUE_THRESHOLD` | Amount in INR above which a high-value alert fires (default `10000`) |
 
 > **Important:** Render's `connectionString` property injects the internal hostname (`dpg-xxx`), which is only reachable from services in the same region. If your backend is in a different region than the Postgres instance, override `SPRING_DATASOURCE_URL` manually with the **External Database URL** from the Postgres service's Connect tab (the one ending in `.singapore-postgres.render.com`).
 

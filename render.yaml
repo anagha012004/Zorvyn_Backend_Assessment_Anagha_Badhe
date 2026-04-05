@@ -29,6 +29,19 @@ services:
         sync: false          # set manually: openssl rand -base64 32
       - key: FRONTEND_URL
         sync: false          # set after frontend is deployed
+      # ── Mail / Email Alerts (optional) ───────────────────
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        sync: false          # your Gmail address (or SES SMTP user)
+      - key: MAIL_PASSWORD
+        sync: false          # Gmail app password or SES SMTP password
+      - key: ALERT_EMAIL_FROM
+        sync: false          # e.g. noreply@yourdomain.com
+      - key: ALERT_HIGH_VALUE_THRESHOLD
+        value: "10000"       # alert threshold in INR
 
   # ── Frontend ─────────────────────────────────────────────
   - type: web
