@@ -177,11 +177,16 @@ public class DataInitializer {
             redisConnectionFactory.getConnection().serverCommands().flushDb();
             log.info("[DataInitializer] Redis flushed on startup");
         } catch (Exception e) {
-            log.warn("[DataInitializer] Redis flush failed, evicting caches manually: {}", e.getMessage());
+            log.warn("[DataInitializer] Redis flush skipped: {}", e.getMessage());
+        }
+        // Also clear in-memory caches
+        try {
             var dashCache  = cacheManager.getCache("dashboard-summary");
             var trendCache = cacheManager.getCache("monthly-trends");
             if (dashCache  != null) dashCache.clear();
             if (trendCache != null) trendCache.clear();
+        } catch (Exception e) {
+            log.warn("[DataInitializer] Cache eviction skipped: {}", e.getMessage());
         }
     }
 

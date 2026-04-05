@@ -1,23 +1,20 @@
 package com.financeapi.config;
 
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.RedisURI;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.cache.RedisCacheConfiguration;
-import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 import java.time.Duration;
 
@@ -57,27 +54,25 @@ public class RedisConfig {
         return new LettuceConnectionFactory(serverConfig, clientConfig);
     }
 
+    /**
+     * Use simple in-memory cache instead of Redis for application caches.
+     * This eliminates all Jackson deserialization 500s caused by Redis
+     * trying to deserialize complex DTOs (TransactionResponse, BigDecimal maps)
+     * back from JSON with type metadata mismatches.
+     *
+     * Redis connection is still available for DataInitializer to flush on startup.
+     */
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
-        // activateDefaultTyping embeds @class metadata so Redis can deserialize
-        // back to the correct concrete type (not LinkedHashMap)
+    @Primary
+    public CacheManager cacheManager() {
+        return new ConcurrentMapCacheManager("dashboard-summary", "monthly-trends");
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        mapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
-
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(5))
-                .disableCachingNullValues()
-                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer(mapper)));
-
-        return RedisCacheManager.builder(factory)
-                .cacheDefaults(config)
-                .build();
+        return mapper;
     }
 }
