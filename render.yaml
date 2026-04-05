@@ -1,0 +1,50 @@
+services:
+  # ── Backend ──────────────────────────────────────────────
+  - type: web
+    name: zorvyn-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: zorvyn-postgres
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: zorvyn-postgres
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: zorvyn-postgres
+          property: password
+      - key: SPRING_DATA_REDIS_URL
+        sync: false          # set manually from Upstash (rediss://...)
+      - key: SPRING_DATA_REDIS_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false          # set after frontend is deployed
+
+  # ── Frontend ─────────────────────────────────────────────
+  - type: web
+    name: zorvyn-frontend
+    runtime: docker
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: zorvyn-backend
+          type: web
+          property: host
+          envVarKey: VITE_API_URL
+
+# ── PostgreSQL ────────────────────────────────────────────
+databases:
+  - name: zorvyn-postgres
+    plan: free
+    databaseName: financedb
