@@ -20,6 +20,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,8 +59,8 @@ public class BudgetService {
         int daysRemaining = Math.max(0, totalDays - dayOfMonth);
 
         List<EnvelopeStatus> envelopes = budgets.stream().map(b -> {
-            BigDecimal spent = budgetRepository.sumSpendByCategoryAndMonth(
-                    b.getCategory().getId(), monthYear);
+            BigDecimal spent = Optional.ofNullable(budgetRepository.sumSpendByCategoryAndMonth(
+                    b.getCategory().getId(), monthYear)).orElse(BigDecimal.ZERO);
             double pct = b.getAmountLimit().compareTo(BigDecimal.ZERO) == 0 ? 0
                     : spent.divide(b.getAmountLimit(), 4, RoundingMode.HALF_UP)
                            .multiply(BigDecimal.valueOf(100)).doubleValue();
