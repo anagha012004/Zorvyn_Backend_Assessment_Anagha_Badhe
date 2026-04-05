@@ -1,7 +1,9 @@
 package com.financeapi.config;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.RedisURI;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,7 +43,6 @@ public class RedisConfig {
         }
 
         LettuceClientConfiguration clientConfig;
-        // rediss:// scheme means TLS required
         if (redisUrl.startsWith("rediss://")) {
             clientConfig = LettuceClientConfiguration.builder()
                     .commandTimeout(Duration.ofSeconds(10))
@@ -58,9 +59,16 @@ public class RedisConfig {
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
+        // activateDefaultTyping embeds @class metadata so Redis can deserialize
+        // back to the correct concrete type (not LinkedHashMap)
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+        );
 
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(5))
@@ -70,7 +78,6 @@ public class RedisConfig {
 
         return RedisCacheManager.builder(factory)
                 .cacheDefaults(config)
-                .transactionAware()
                 .build();
     }
 }

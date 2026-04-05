@@ -10,6 +10,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -35,6 +36,7 @@ public class DataInitializer {
     private final TransactionService    transactionService;
     private final CacheManager          cacheManager;
     private final PasswordEncoder       passwordEncoder;
+    private final RedisConnectionFactory redisConnectionFactory;
 
     @Bean
     public ApplicationRunner seedData() {
@@ -189,10 +191,17 @@ public class DataInitializer {
     }
 
     private void evictCaches() {
-        var dashCache = cacheManager.getCache("dashboard-summary");
-        var trendCache = cacheManager.getCache("monthly-trends");
-        if (dashCache  != null) dashCache.clear();
-        if (trendCache != null) trendCache.clear();
+        // Flush all Redis keys to clear any stale entries from previous serialization formats
+        try {
+            redisConnectionFactory.getConnection().serverCommands().flushDb();
+            log.info("[DataInitializer] Redis flushed on startup");
+        } catch (Exception e) {
+            log.warn("[DataInitializer] Redis flush failed, falling back to cache eviction: {}", e.getMessage());
+            var dashCache  = cacheManager.getCache("dashboard-summary");
+            var trendCache = cacheManager.getCache("monthly-trends");
+            if (dashCache  != null) dashCache.clear();
+            if (trendCache != null) trendCache.clear();
+        }
         log.info("[DataInitializer] Caches evicted after seeding");
     }
 
