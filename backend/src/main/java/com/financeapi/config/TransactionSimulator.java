@@ -50,11 +50,11 @@ public class TransactionSimulator {
     );
 
     /**
-     * Fires every 15 seconds. Picks a random user and a random transaction template,
+     * Fires every 60 seconds. Picks a random user and a random transaction template,
      * calls the real TransactionService so anomaly detection, DNA fingerprinting,
      * velocity scoring, merchant tagging, SSE broadcast, and audit logging all run.
      */
-    @Scheduled(fixedDelay = 7200000)
+    @Scheduled(fixedDelay = 60000)
     public void simulateTransaction() {
         try {
             // Pick a random active user (skip if none exist yet)

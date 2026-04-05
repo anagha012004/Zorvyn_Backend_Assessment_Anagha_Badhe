@@ -19,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,37 +29,33 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class DataInitializer {
 
-    private final UserRepository        userRepository;
-    private final RoleRepository        roleRepository;
-    private final CategoryRepository    categoryRepository;
-    private final TransactionRepository transactionRepository;
-    private final BudgetRepository      budgetRepository;
-    private final TransactionService    transactionService;
-    private final CacheManager          cacheManager;
-    private final PasswordEncoder       passwordEncoder;
+    private final UserRepository         userRepository;
+    private final RoleRepository         roleRepository;
+    private final CategoryRepository     categoryRepository;
+    private final TransactionRepository  transactionRepository;
+    private final BudgetRepository       budgetRepository;
+    private final TransactionService     transactionService;
+    private final CacheManager           cacheManager;
+    private final PasswordEncoder        passwordEncoder;
     private final RedisConnectionFactory redisConnectionFactory;
 
     @Bean
     public ApplicationRunner seedData() {
         return args -> {
-            evictCaches();  // flush stale Redis entries first, before any cache read
+            evictCaches();
             fixAdminPassword();
             seedUser("analyst@finance.com", "Alice Analyst", Role.RoleName.ANALYST);
             seedUser("viewer@finance.com",  "Bob Viewer",    Role.RoleName.VIEWER);
 
-            // Only seed once — idempotency key acts as the guard
             if (transactionRepository.findByIdempotencyKey("seed-admin-salary-1").isEmpty()) {
                 seedTransactions();
             }
 
             seedBudgets();
-
-            // Evict any stale cached zeros that may have been served before seeding
             evictCaches();
         };
     }
 
-    // ── Admin password fix ────────────────────────────────────────────────────
     private void fixAdminPassword() {
         userRepository.findByEmail("admin@finance.com").ifPresent(admin -> {
             if (!passwordEncoder.matches("admin123", admin.getPasswordHash())) {
@@ -68,7 +65,6 @@ public class DataInitializer {
         });
     }
 
-    // ── User seeding (idempotent) ─────────────────────────────────────────────
     private void seedUser(String email, String fullName, Role.RoleName roleName) {
         userRepository.findByEmail(email).orElseGet(() -> {
             Role viewer = roleRepository.findByName(Role.RoleName.VIEWER).orElseThrow();
@@ -83,50 +79,39 @@ public class DataInitializer {
         });
     }
 
-    // ── Transactions via service (full business logic runs) ───────────────────
     private void seedTransactions() {
-        LocalDate today = LocalDate.now();
+        LocalDate today  = LocalDate.now();
         Map<String, Long> catIds = buildCategoryMap();
 
-        // Each row: idempotencyKey, amount, type, categoryName, daysAgo, notes, asEmail, asRole
         List<Object[]> rows = List.of(
-            // Admin — salary income
-            new Object[]{"seed-admin-salary-1",  85000, "INCOME", "Salary",        30, "Monthly salary June",       "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-salary-2",  85000, "INCOME", "Salary",        60, "Monthly salary May",        "admin@finance.com",   "ROLE_ADMIN"},
-            // Admin — food (spread for forecast/trend baseline)
-            new Object[]{"seed-admin-food-1",      450, "EXPENSE", "Food",          1, "Swiggy dinner order",       "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-food-2",      320, "EXPENSE", "Food",          3, "Zomato lunch",              "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-food-3",      180, "EXPENSE", "Food",          5, "Grocery BigBasket",         "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-food-4",      560, "EXPENSE", "Food",          8, "Swiggy weekend binge",      "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-food-5",      210, "EXPENSE", "Food",         12, "Zomato breakfast",          "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-food-6",      390, "EXPENSE", "Food",         16, "Swiggy order",              "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-food-7",      270, "EXPENSE", "Food",         22, "Zomato dinner",             "admin@finance.com",   "ROLE_ADMIN"},
-            // Anomaly trigger — large amount to demo 3-sigma detection
-            new Object[]{"seed-admin-food-anomaly",12000,"EXPENSE","Food",          0, "Catering for office party", "admin@finance.com",   "ROLE_ADMIN"},
-            // Admin — transport
-            new Object[]{"seed-admin-trans-1",     250, "EXPENSE", "Transport",     2, "Uber cab to airport",       "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-trans-2",     120, "EXPENSE", "Transport",     4, "Ola ride",                  "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-trans-3",    3200, "EXPENSE", "Transport",    15, "Petrol refill BPCL",        "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-trans-4",     180, "EXPENSE", "Transport",    25, "Uber ride",                 "admin@finance.com",   "ROLE_ADMIN"},
-            // Admin — entertainment
-            new Object[]{"seed-admin-ent-1",       649, "EXPENSE", "Entertainment", 7, "Netflix subscription",      "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-ent-2",       199, "EXPENSE", "Entertainment", 7, "Spotify premium",           "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-ent-3",      1400, "EXPENSE", "Entertainment",20, "Movie tickets BookMyShow",  "admin@finance.com",   "ROLE_ADMIN"},
-            // Admin — utilities
-            new Object[]{"seed-admin-util-1",     1850, "EXPENSE", "Utilities",    10, "Electricity bill BESCOM",   "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-util-2",      999, "EXPENSE", "Utilities",    10, "Airtel broadband",          "admin@finance.com",   "ROLE_ADMIN"},
-            // Admin — healthcare
-            new Object[]{"seed-admin-health-1",   2200, "EXPENSE", "Healthcare",   18, "Apollo pharmacy",           "admin@finance.com",   "ROLE_ADMIN"},
-            // Admin — other
-            new Object[]{"seed-admin-other-1",    3499, "EXPENSE", "Other",         6, "Amazon order headphones",   "admin@finance.com",   "ROLE_ADMIN"},
-            new Object[]{"seed-admin-other-2",     799, "EXPENSE", "Other",        22, "Amazon order books",        "admin@finance.com",   "ROLE_ADMIN"},
-            // Analyst — salary + expenses
-            new Object[]{"seed-analyst-salary-1",72000, "INCOME", "Salary",        30, "Salary June",               "analyst@finance.com", "ROLE_ANALYST"},
-            new Object[]{"seed-analyst-food-1",    380, "EXPENSE", "Food",          2, "Swiggy order",              "analyst@finance.com", "ROLE_ANALYST"},
-            new Object[]{"seed-analyst-food-2",    290, "EXPENSE", "Food",          9, "Zomato lunch",              "analyst@finance.com", "ROLE_ANALYST"},
-            new Object[]{"seed-analyst-trans-1",   150, "EXPENSE", "Transport",     3, "Uber ride",                 "analyst@finance.com", "ROLE_ANALYST"},
-            new Object[]{"seed-analyst-ent-1",     649, "EXPENSE", "Entertainment", 7, "Netflix subscription",      "analyst@finance.com", "ROLE_ANALYST"},
-            new Object[]{"seed-analyst-util-1",   1200, "EXPENSE", "Utilities",    11, "Electricity bill BESCOM",   "analyst@finance.com", "ROLE_ANALYST"}
+            new Object[]{"seed-admin-salary-1",  85000, "INCOME",  "Salary",        30, "Monthly salary June",       "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-salary-2",  85000, "INCOME",  "Salary",        60, "Monthly salary May",        "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-1",      450, "EXPENSE", "Food",           1, "Swiggy dinner order",       "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-2",      320, "EXPENSE", "Food",           3, "Zomato lunch",              "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-3",      180, "EXPENSE", "Food",           5, "Grocery BigBasket",         "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-4",      560, "EXPENSE", "Food",           8, "Swiggy weekend binge",      "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-5",      210, "EXPENSE", "Food",          12, "Zomato breakfast",          "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-6",      390, "EXPENSE", "Food",          16, "Swiggy order",              "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-7",      270, "EXPENSE", "Food",          22, "Zomato dinner",             "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-food-anomaly",12000,"EXPENSE","Food",           0, "Catering for office party", "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-trans-1",     250, "EXPENSE", "Transport",      2, "Uber cab to airport",       "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-trans-2",     120, "EXPENSE", "Transport",      4, "Ola ride",                  "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-trans-3",    3200, "EXPENSE", "Transport",     15, "Petrol refill BPCL",        "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-trans-4",     180, "EXPENSE", "Transport",     25, "Uber ride",                 "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-ent-1",       649, "EXPENSE", "Entertainment",  7, "Netflix subscription",      "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-ent-2",       199, "EXPENSE", "Entertainment",  7, "Spotify premium",           "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-ent-3",      1400, "EXPENSE", "Entertainment", 20, "Movie tickets BookMyShow",  "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-util-1",     1850, "EXPENSE", "Utilities",     10, "Electricity bill BESCOM",   "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-util-2",      999, "EXPENSE", "Utilities",     10, "Airtel broadband",          "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-health-1",   2200, "EXPENSE", "Healthcare",    18, "Apollo pharmacy",           "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-other-1",    3499, "EXPENSE", "Other",          6, "Amazon order headphones",   "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-admin-other-2",     799, "EXPENSE", "Other",         22, "Amazon order books",        "admin@finance.com",   "ROLE_ADMIN"},
+            new Object[]{"seed-analyst-salary-1", 72000,"INCOME",  "Salary",        30, "Salary June",               "analyst@finance.com", "ROLE_ANALYST"},
+            new Object[]{"seed-analyst-food-1",    380, "EXPENSE", "Food",           2, "Swiggy order",              "analyst@finance.com", "ROLE_ANALYST"},
+            new Object[]{"seed-analyst-food-2",    290, "EXPENSE", "Food",           9, "Zomato lunch",              "analyst@finance.com", "ROLE_ANALYST"},
+            new Object[]{"seed-analyst-trans-1",   150, "EXPENSE", "Transport",      3, "Uber ride",                 "analyst@finance.com", "ROLE_ANALYST"},
+            new Object[]{"seed-analyst-ent-1",     649, "EXPENSE", "Entertainment",  7, "Netflix subscription",      "analyst@finance.com", "ROLE_ANALYST"},
+            new Object[]{"seed-analyst-util-1",   1200, "EXPENSE", "Utilities",     11, "Electricity bill BESCOM",   "analyst@finance.com", "ROLE_ANALYST"}
         );
 
         for (Object[] r : rows) {
@@ -142,7 +127,6 @@ public class DataInitializer {
             req.setNotes((String) r[5]);
 
             try {
-                // Set SecurityContext so @PreAuthorize passes and audit logging captures the right user
                 runAs(email, springRole, () ->
                     transactionService.create(req, idempotencyKey, email)
                 );
@@ -152,7 +136,6 @@ public class DataInitializer {
         }
     }
 
-    // ── Budget envelopes (current month, idempotent) ──────────────────────────
     private void seedBudgets() {
         String monthYear = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
         User admin = userRepository.findByEmail("admin@finance.com").orElseThrow();
@@ -183,33 +166,25 @@ public class DataInitializer {
         );
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
     private Map<String, Long> buildCategoryMap() {
-        Map<String, Long> map = new java.util.HashMap<>();
+        Map<String, Long> map = new HashMap<>();
         categoryRepository.findAll().forEach(c -> map.put(c.getName(), c.getId()));
         return map;
     }
 
     private void evictCaches() {
-        // Flush all Redis keys to clear any stale entries from previous serialization formats
         try {
             redisConnectionFactory.getConnection().serverCommands().flushDb();
             log.info("[DataInitializer] Redis flushed on startup");
         } catch (Exception e) {
-            log.warn("[DataInitializer] Redis flush failed, falling back to cache eviction: {}", e.getMessage());
+            log.warn("[DataInitializer] Redis flush failed, evicting caches manually: {}", e.getMessage());
             var dashCache  = cacheManager.getCache("dashboard-summary");
             var trendCache = cacheManager.getCache("monthly-trends");
             if (dashCache  != null) dashCache.clear();
             if (trendCache != null) trendCache.clear();
         }
-        log.info("[DataInitializer] Caches evicted after seeding");
     }
 
-    /**
-     * Temporarily sets a Spring SecurityContext so @PreAuthorize checks pass
-     * and AuditAspect captures the correct email. Clears context after the call.
-     */
     private void runAs(String email, String springRole, Runnable action) {
         var auth = new UsernamePasswordAuthenticationToken(
             email, null, List.of(new SimpleGrantedAuthority(springRole))

@@ -50,11 +50,16 @@ public class SecurityConfig {
                             "/api-docs/**"
                     ).permitAll()
                     .requestMatchers("/actuator/health").permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/v1/transactions/stream")
-                            .hasAnyRole("VIEWER", "ANALYST", "ADMIN")
                     .requestMatchers(HttpMethod.GET, "/api/v1/**")
                             .hasAnyRole("VIEWER", "ANALYST", "ADMIN")
-                    .anyRequest().hasAnyRole("ANALYST", "ADMIN")
+                    .requestMatchers(HttpMethod.POST,
+                            "/api/v1/transactions",
+                            "/api/v1/transactions/",
+                            "/api/v1/transactions/import/**"
+                    ).hasAnyRole("ANALYST", "ADMIN")
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/transactions/**")
+                            .hasAnyRole("ANALYST", "ADMIN")
+                    .anyRequest().hasAnyRole("ADMIN")
                  )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
@@ -70,11 +75,12 @@ public class SecurityConfig {
         if (frontendUrl != null && !frontendUrl.isBlank()) origins.add(frontendUrl);
         config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of(
                 "X-Anomaly-Warning", "X-Anomaly-Detail",
-                "X-Velocity-Score", "X-RateLimit-Remaining"
+                "X-Velocity-Score", "X-RateLimit-Remaining",
+                "Authorization"
         ));
+        config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

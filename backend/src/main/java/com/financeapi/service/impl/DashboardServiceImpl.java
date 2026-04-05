@@ -48,9 +48,10 @@ public class DashboardServiceImpl implements DashboardService {
         List<Object[]> rows = transactionRepository.monthlyTrends();
         Map<String, Map<String, BigDecimal>> trends = new LinkedHashMap<>();
         for (Object[] row : rows) {
-            String month = (String) row[0];
-            BigDecimal amount = (BigDecimal) row[1];
-            String type = row[2].toString();
+            String month = row[0] != null ? row[0].toString() : "Unknown";
+            BigDecimal amount = row[1] instanceof BigDecimal bd ? bd
+                    : new BigDecimal(row[1].toString());
+            String type = row[2] != null ? row[2].toString() : "UNKNOWN";
             trends.computeIfAbsent(month, k -> new LinkedHashMap<>()).put(type, amount);
         }
         Map<String, Object> result = new LinkedHashMap<>();

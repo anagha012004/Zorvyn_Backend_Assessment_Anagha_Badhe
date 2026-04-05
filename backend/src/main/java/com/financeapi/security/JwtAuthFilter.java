@@ -10,6 +10,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -22,6 +24,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtUtils jwtUtils;
     private final UserDetailsService userDetailsService;
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
@@ -30,7 +34,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             token = header.substring(7);
         } else {
-            // SSE clients can't set headers — accept token as query param
             String queryToken = request.getParameter("token");
             if (queryToken != null && !queryToken.isBlank()) token = queryToken;
         }
@@ -38,13 +41,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (jwtUtils.isValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
-            String email = jwtUtils.extractEmail(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(auth);
+        if (!jwtUtils.isValid(token)) {
+            log.warn("[JWT] Invalid/expired token for {} {}", request.getMethod(), request.getRequestURI());
+            chain.doFilter(request, response);
+            return;
+        }
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            try {
+                String email = jwtUtils.extractEmail(token);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (Exception e) {
+                log.warn("[JWT] Could not set authentication: {}", e.getMessage());
+            }
         }
         chain.doFilter(request, response);
     }
