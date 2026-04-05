@@ -42,41 +42,73 @@ public class DataInitializer {
     @Bean
     public ApplicationRunner seedData() {
         return args -> {
-            evictCaches();
-            fixAdminPassword();
-            seedUser("analyst@finance.com", "Alice Analyst", Role.RoleName.ANALYST);
-            seedUser("viewer@finance.com",  "Bob Viewer",    Role.RoleName.VIEWER);
+            log.info("[DataInitializer] Starting seed...");
+            try {
+                evictCaches();
+                fixPasswords();
+                seedUser("analyst@finance.com", "Alice Analyst", Role.RoleName.ANALYST);
+                seedUser("viewer@finance.com",  "Bob Viewer",    Role.RoleName.VIEWER);
 
-            if (transactionRepository.findByIdempotencyKey("seed-admin-salary-1").isEmpty()) {
-                seedTransactions();
+                if (transactionRepository.findByIdempotencyKey("seed-admin-salary-1").isEmpty()) {
+                    log.info("[DataInitializer] Seeding transactions...");
+                    seedTransactions();
+                } else {
+                    log.info("[DataInitializer] Transactions already seeded, skipping.");
+                }
+
+                seedBudgets();
+                evictCaches();
+                log.info("[DataInitializer] Seed complete.");
+            } catch (Exception e) {
+                log.error("[DataInitializer] Seed failed: {}", e.getMessage(), e);
             }
-
-            seedBudgets();
-            evictCaches();
         };
     }
 
-    private void fixAdminPassword() {
-        userRepository.findByEmail("admin@finance.com").ifPresent(admin -> {
-            if (!passwordEncoder.matches("admin123", admin.getPasswordHash())) {
-                admin.setPasswordHash(passwordEncoder.encode("admin123"));
-                userRepository.save(admin);
+    private void fixPasswords() {
+        // admin123
+        String adminHash = passwordEncoder.encode("admin123");
+        // analyst123
+        String analystHash = passwordEncoder.encode("analyst123");
+        // viewer123
+        String viewerHash = passwordEncoder.encode("viewer123");
+
+        userRepository.findByEmail("admin@finance.com").ifPresent(u -> {
+            if (!passwordEncoder.matches("admin123", u.getPasswordHash())) {
+                u.setPasswordHash(adminHash);
+                userRepository.save(u);
+                log.info("[DataInitializer] Fixed admin password.");
+            }
+        });
+        userRepository.findByEmail("analyst@finance.com").ifPresent(u -> {
+            if (!passwordEncoder.matches("analyst123", u.getPasswordHash())) {
+                u.setPasswordHash(analystHash);
+                userRepository.save(u);
+                log.info("[DataInitializer] Fixed analyst password.");
+            }
+        });
+        userRepository.findByEmail("viewer@finance.com").ifPresent(u -> {
+            if (!passwordEncoder.matches("viewer123", u.getPasswordHash())) {
+                u.setPasswordHash(viewerHash);
+                userRepository.save(u);
+                log.info("[DataInitializer] Fixed viewer password.");
             }
         });
     }
 
     private void seedUser(String email, String fullName, Role.RoleName roleName) {
-        userRepository.findByEmail(email).orElseGet(() -> {
-            Role viewer = roleRepository.findByName(Role.RoleName.VIEWER).orElseThrow();
-            Role role   = roleRepository.findByName(roleName).orElseThrow();
-            User user   = new User();
-            user.setEmail(email);
-            user.setFullName(fullName);
-            user.setPasswordHash(passwordEncoder.encode("demo1234"));
-            user.setTimezone("Asia/Kolkata");
-            user.setRoles(roleName == Role.RoleName.ANALYST ? Set.of(viewer, role) : Set.of(viewer));
-            return userRepository.save(user);
-        });
+        if (userRepository.findByEmail(email).isPresent()) return;
+        Role viewer = roleRepository.findByName(Role.RoleName.VIEWER).orElseThrow();
+        Role role   = roleRepository.findByName(roleName).orElseThrow();
+        User user   = new User();
+        user.setEmail(email);
+        user.setFullName(fullName);
+        user.setPasswordHash(passwordEncoder.encode(
+                roleName == Role.RoleName.ANALYST ? "analyst123" : "viewer123"));
+        user.setTimezone("Asia/Kolkata");
+        user.setRoles(roleName == Role.RoleName.ANALYST ? Set.of(viewer, role) : Set.of(viewer));
+        userRepository.save(user);
+        log.info("[DataInitializer] Created user: {}", email);
     }
 
     private void seedTransactions() {
@@ -131,9 +163,10 @@ public class DataInitializer {
                     transactionService.create(req, idempotencyKey, email)
                 );
             } catch (Exception e) {
-                log.warn("Seed transaction skipped [{}]: {}", idempotencyKey, e.getMessage());
+                log.warn("[DataInitializer] Skipped [{}]: {}", idempotencyKey, e.getMessage());
             }
         }
+        log.info("[DataInitializer] Transactions seeded.");
     }
 
     private void seedBudgets() {
@@ -164,6 +197,7 @@ public class DataInitializer {
                     }
                 })
         );
+        log.info("[DataInitializer] Budgets seeded for {}.", monthYear);
     }
 
     private Map<String, Long> buildCategoryMap() {
@@ -175,18 +209,17 @@ public class DataInitializer {
     private void evictCaches() {
         try {
             redisConnectionFactory.getConnection().serverCommands().flushDb();
-            log.info("[DataInitializer] Redis flushed on startup");
+            log.info("[DataInitializer] Redis flushed.");
         } catch (Exception e) {
             log.warn("[DataInitializer] Redis flush skipped: {}", e.getMessage());
         }
-        // Also clear in-memory caches
         try {
-            var dashCache  = cacheManager.getCache("dashboard-summary");
-            var trendCache = cacheManager.getCache("monthly-trends");
-            if (dashCache  != null) dashCache.clear();
-            if (trendCache != null) trendCache.clear();
+            var c1 = cacheManager.getCache("dashboard-summary");
+            var c2 = cacheManager.getCache("monthly-trends");
+            if (c1 != null) c1.clear();
+            if (c2 != null) c2.clear();
         } catch (Exception e) {
-            log.warn("[DataInitializer] Cache eviction skipped: {}", e.getMessage());
+            log.warn("[DataInitializer] In-memory cache eviction skipped: {}", e.getMessage());
         }
     }
 
