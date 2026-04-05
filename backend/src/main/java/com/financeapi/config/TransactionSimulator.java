@@ -54,7 +54,7 @@ public class TransactionSimulator {
      * calls the real TransactionService so anomaly detection, DNA fingerprinting,
      * velocity scoring, merchant tagging, SSE broadcast, and audit logging all run.
      */
-    @Scheduled(fixedDelay = 15000)
+    @Scheduled(fixedDelay = 3600000)
     public void simulateTransaction() {
         try {
             // Pick a random active user (skip if none exist yet)
