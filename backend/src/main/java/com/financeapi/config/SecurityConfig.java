@@ -42,13 +42,19 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/api-docs/**").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/transactions/stream").hasAnyRole("VIEWER", "ANALYST", "ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAnyRole("VIEWER", "ANALYST", "ADMIN")
-                        .anyRequest().hasAnyRole("ANALYST", "ADMIN")
-                )
+                    .requestMatchers("/api/v1/auth/**").permitAll()
+                    .requestMatchers(
+                            "/swagger-ui/**",
+                            "/swagger-ui.html",
+                            "/v3/api-docs/**"
+                    ).permitAll()
+                    .requestMatchers("/actuator/health").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/transactions/stream")
+                            .hasAnyRole("VIEWER", "ANALYST", "ADMIN")
+                    .requestMatchers(HttpMethod.GET, "/api/v1/**")
+                            .hasAnyRole("VIEWER", "ANALYST", "ADMIN")
+                    .anyRequest().hasAnyRole("ANALYST", "ADMIN")
+                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(rateLimitFilter, JwtAuthFilter.class)
