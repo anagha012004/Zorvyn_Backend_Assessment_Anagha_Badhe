@@ -16,7 +16,12 @@ public class JwtUtils {
 
     public JwtUtils(@Value("${jwt.secret}") String secret,
                     @Value("${jwt.access-token-expiry}") long accessTokenExpiry) {
-        this.key = Keys.hmacShaKeyFor(hexToBytes(secret));
+        byte[] keyBytes = secret.length() >= 64 && secret.matches("[0-9a-fA-F]+")
+                ? hexToBytes(secret)
+                : secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (keyBytes.length < 32)
+            throw new IllegalArgumentException("JWT_SECRET must be at least 32 bytes (256 bits)");
+        this.key = Keys.hmacShaKeyFor(keyBytes);
         this.accessTokenExpiry = accessTokenExpiry;
     }
 
