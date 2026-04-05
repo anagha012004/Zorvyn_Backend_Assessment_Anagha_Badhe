@@ -47,7 +47,7 @@ class TransactionControllerTest {
         response.setTotalPages(0);
         response.setTotalElements(0);
 
-        when(transactionService.getAll(any(), any(), any(), any(), any())).thenReturn(response);
+        when(transactionService.getAll(any(), any(), any(), any(), any(), any())).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/transactions"))
                 .andExpect(status().isOk())

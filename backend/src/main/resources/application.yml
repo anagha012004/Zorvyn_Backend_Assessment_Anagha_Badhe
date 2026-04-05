@@ -29,10 +29,10 @@ server:
   port: ${PORT:8080}
 
 jwt:
-  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  secret: ${JWT_SECRET}
   access-token-expiry: 900000
   refresh-token-expiry: 604800000
-  refresh-token-pepper: ${JWT_REFRESH_TOKEN_PEPPER:Z0rv7n$P3pp3rK3y!D3f@ult}
+  refresh-token-pepper: ${JWT_REFRESH_TOKEN_PEPPER}
 
 springdoc:
   api-docs:
