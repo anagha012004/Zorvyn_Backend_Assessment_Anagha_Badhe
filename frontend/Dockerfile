@@ -11,6 +11,6 @@ FROM node:20-alpine
 WORKDIR /app
 RUN npm install -g serve
 COPY --from=build /app/dist ./dist
-COPY serve.json ./
+COPY serve.json ./serve.json
 EXPOSE 3000
-CMD ["serve", "dist", "-l", "3000"]
+CMD ["serve", "dist", "-l", "3000", "--single"]
