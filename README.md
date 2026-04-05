@@ -287,7 +287,7 @@ On every transaction creation, `VelocityService` computes a velocity score (0–
 
 ### 4.10 Transaction Simulator
 
-`TransactionSimulator` fires every **8 hours** and creates a realistic random transaction for a random active user, exercising the full transaction pipeline including anomaly detection, velocity scoring, merchant tagging, SSE broadcast, email alerts, and audit logging.
+`TransactionSimulator` fires every **2 hours** and creates a realistic random transaction for a random active user, exercising the full transaction pipeline including anomaly detection, velocity scoring, merchant tagging, SSE broadcast, email alerts, and audit logging.
 
 ### 4.11 Bulk Import
 
