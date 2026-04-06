@@ -114,7 +114,7 @@ export default function Transactions() {
       const res = await api.get('/transactions/export', { params: { format }, responseType: 'blob' })
       const url = URL.createObjectURL(res.data)
       const a = document.createElement('a')
-      a.href = url; a.download = `zorvyn-transactions.${format === 'excel' ? 'xlsx' : 'csv'}`
+      a.href = url; a.download = `fintech-transactions.${format === 'excel' ? 'xlsx' : 'csv'}`
       a.click(); URL.revokeObjectURL(url)
     } catch {}
   }

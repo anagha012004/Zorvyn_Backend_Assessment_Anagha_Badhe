@@ -1,7 +1,7 @@
 services:
   # ── Backend ──────────────────────────────────────────────
   - type: web
-    name: zorvyn-backend
+    name: fintech-backend
     runtime: docker
     rootDir: backend
     dockerfilePath: ./Dockerfile
@@ -9,15 +9,15 @@ services:
     envVars:
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
-          name: zorvyn-postgres
+          name: fintech-postgres
           property: connectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
-          name: zorvyn-postgres
+          name: fintech-postgres
           property: user
       - key: SPRING_DATASOURCE_PASSWORD
         fromDatabase:
-          name: zorvyn-postgres
+          name: fintech-postgres
           property: password
       - key: SPRING_DATA_REDIS_URL
         sync: false          # set manually from Upstash (rediss://...)
@@ -45,17 +45,17 @@ services:
 
   # ── Frontend ─────────────────────────────────────────────
   - type: web
-    name: zorvyn-frontend
+    name: fintech-frontend
     runtime: docker
     rootDir: frontend
     dockerfilePath: ./Dockerfile
     plan: free
     envVars:
       - key: VITE_API_URL
-        sync: false          # set to https://zorvyn-backend.onrender.com after backend deploys
+        sync: false          # set to https://fintech-backend.onrender.com after backend deploys
 
 # ── PostgreSQL ────────────────────────────────────────────
 databases:
-  - name: zorvyn-postgres
+  - name: fintech-postgres
     plan: free
     databaseName: financedb

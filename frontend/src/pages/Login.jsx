@@ -31,7 +31,7 @@ export default function Login() {
               <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse"><stop stopColor="#6366f1"/><stop offset="1" stopColor="#22d3ee"/></linearGradient></defs>
             </svg>
           </div>
-          <span className={s.brandName}>Zorvyn</span>
+          <span className={s.brandName}>FinTech</span>
         </div>
 
         <h1 className={s.title}>Welcome back</h1>

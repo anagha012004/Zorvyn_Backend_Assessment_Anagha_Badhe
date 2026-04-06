@@ -52,7 +52,7 @@ export default function Layout() {
             </div>
             {!collapsed && (
               <div className={s.brandText}>
-                <span className={s.brandName}>Zorvyn</span>
+                <span className={s.brandName}>FinTech</span>
                
               </div>
             )}
@@ -111,7 +111,7 @@ export default function Layout() {
         {/* Top bar */}
         <header className={s.topbar}>
           <div className={s.breadcrumb}>
-            <span className={s.breadHome}>Zorvyn</span>
+            <span className={s.breadHome}>FinTech</span>
             <span className={s.breadSep}>/</span>
             <span className={s.breadCurrent}>{crumb || 'Dashboard'}</span>
           </div>
