@@ -27,7 +27,7 @@ A production-grade Spring Boot 3 backend for a finance dashboard system with rol
 ## 1. Architecture Overview
 
 ![Arcitecture Overview](arch.png)
-![Auth Flow](auth flow dig.png)
+![Auth Flow](authflowdig.png)
 
 ## 2. Tech Stack
 
