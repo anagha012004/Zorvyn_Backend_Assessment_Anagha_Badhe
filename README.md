@@ -26,36 +26,7 @@ A production-grade Spring Boot 3 backend for a finance dashboard system with rol
 
 ## 1. Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     React Frontend                       │
-│              (Vite + React Router + Recharts)            │
-└────────────────────────┬────────────────────────────────┘
-                         │ HTTP / REST / SSE
-┌────────────────────────▼────────────────────────────────┐
-│                  Spring Boot 3 API                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐  │
-│  │Controller│→ │ Service  │→ │   Repo   │→ │  JPA   │  │
-│  └──────────┘  └──────────┘  └──────────┘  └────────┘  │
-│       ↑              ↑                                   │
-│  JWT Filter     AOP Audit                                │
-│  Rate Limit     @PreAuthorize                            │
-└──────────┬──────────────────────────┬───────────────────┘
-           │                          │
-    ┌──────▼──────┐           ┌───────▼──────┐
-    │ PostgreSQL  │           │    Redis      │
-    │  (Render)   │           │  (Upstash)    │
-    └─────────────┘           └──────────────┘
-```
-
-The application follows a strict layered architecture:
-- **Controllers** handle HTTP concerns only — no business logic, role checks via `@PreAuthorize`
-- **Services** own all business rules; write operations secured with `@PreAuthorize`
-- **Repositories** are pure data access via Spring Data JPA
-- **DTOs** decouple the API contract from the domain model — entities are never serialized directly
-- **Cross-cutting concerns** (audit logging, rate limiting) are handled via AOP and filters
-
----
+![Arcitecture Overview](arch.png)
 
 ## 2. Tech Stack
 
