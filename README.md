@@ -1,6 +1,6 @@
 # Zorvyn Finance Backend
 
-A production-grade Spring Boot 3 backend for a finance dashboard system with role-based access control, JWT authentication with refresh token rotation, Redis caching, audit logging via AOP, anomaly detection, rate limiting, spending forecasts, budget envelopes, merchant intelligence, velocity scoring, DNA fingerprinting, CSV/Excel/PDF export, bulk import, and email alerts.
+A production-grade Spring Boot 3 backend for a finance dashboard system with role-based access control, JWT authentication with refresh token rotation, in-memory caching, audit logging via AOP, anomaly detection, rate limiting, spending forecasts, budget envelopes, merchant intelligence, velocity scoring, DNA fingerprinting, CSV/Excel/PDF export, bulk import, and email alerts via Resend.
 
 ---
 
@@ -49,11 +49,11 @@ A production-grade Spring Boot 3 backend for a finance dashboard system with rol
 ```
 
 The application follows a strict layered architecture:
-- **Controllers** handle HTTP concerns only — no business logic
-- **Services** own all business rules and are secured with `@PreAuthorize`
+- **Controllers** handle HTTP concerns only — no business logic, role checks via `@PreAuthorize`
+- **Services** own all business rules; write operations secured with `@PreAuthorize`
 - **Repositories** are pure data access via Spring Data JPA
 - **DTOs** decouple the API contract from the domain model — entities are never serialized directly
-- **Cross-cutting concerns** (audit logging, rate limiting) are handled via AOP and filters, keeping business logic clean
+- **Cross-cutting concerns** (audit logging, rate limiting) are handled via AOP and filters
 
 ---
 
@@ -61,17 +61,17 @@ The application follows a strict layered architecture:
 
 | Layer | Technology | Why |
 |---|---|---|
-| Framework | Spring Boot 3.2 + Spring Security 6 | Industry standard, mature ecosystem, excellent Spring Data integration |
-| Database | PostgreSQL 16 via Spring Data JPA + Hibernate | ACID compliance, strong JSON support, production-proven |
-| Migrations | Flyway | Versioned, repeatable schema changes tracked in source control |
-| Cache | Redis via Spring Cache (Upstash) | Sub-millisecond reads for dashboard aggregations; TTL-based invalidation |
+| Framework | Spring Boot 3.2 + Spring Security 6 | Industry standard, mature ecosystem |
+| Database | PostgreSQL 16 via Spring Data JPA + Hibernate 6 | ACID compliance, production-proven |
+| Migrations | Flyway (4 versioned migrations) | Versioned schema changes tracked in source control |
+| Cache | In-memory (`ConcurrentMapCacheManager`) | Zero serialization issues; Redis connection kept for flush-on-startup |
 | Auth | JWT (JJWT 0.12) + Refresh Token Rotation | Stateless auth with replay attack prevention |
-| API Docs | SpringDoc OpenAPI 3 (Swagger UI) | Auto-generated from code, always in sync |
-| Export | Apache POI (Excel) + OpenCSV + iText 8 | Industry-standard libraries for office and PDF generation |
-| Email | Spring Mail (SMTP / AWS SES) | Async anomaly and high-value transaction alerts |
-| Rate Limiting | Bucket4j | Token bucket algorithm, role-aware limits, no external dependency needed |
-| Build | Maven | Stable, widely supported in CI/CD pipelines |
-| Deployment | Docker + Render + Upstash | Reproducible environments, single-command startup |
+| API Docs | SpringDoc OpenAPI 3 (Swagger UI) | Auto-generated from code |
+| Export | Apache POI (Excel) + OpenCSV + iText 8 | Industry-standard libraries |
+| Email | Resend Java SDK | Simple HTTP API, no SMTP config needed |
+| Rate Limiting | Bucket4j | Token bucket algorithm, role-aware limits |
+| Build | Maven | Stable, widely supported in CI/CD |
+| Deployment | Docker + Render + Upstash Redis | Reproducible environments |
 
 ---
 
@@ -86,196 +86,112 @@ The application follows a strict layered architecture:
 | PostgreSQL | Render | Free managed Postgres |
 | Redis | Upstash | Free (TLS, 256MB) |
 
-### Step 1 — Create Upstash Redis
+### Environment Variables — `zorvyn-backend`
 
-1. Sign up at [upstash.com](https://upstash.com)
-2. Create a new Redis database — select the **Singapore** region to match Render's Postgres
-3. Enable **TLS**
-4. Copy the **Redis URL** — it looks like `rediss://default:<password>@<host>.upstash.io:6379`
+| Key | Required | Value |
+|---|---|---|
+| `JWT_SECRET` | Yes | `openssl rand -base64 32` — no surrounding quotes |
+| `JWT_REFRESH_TOKEN_PEPPER` | Yes | `openssl rand -base64 32` — no surrounding quotes |
+| `SPRING_DATASOURCE_URL` | Yes | `jdbc:postgresql://<host>/<db>` — must include `jdbc:` prefix |
+| `SPRING_DATASOURCE_USERNAME` | Yes | Postgres username |
+| `SPRING_DATASOURCE_PASSWORD` | Yes | Postgres password |
+| `SPRING_DATA_REDIS_URL` | Yes | `rediss://default:<password>@<host>.upstash.io:6379` |
+| `SPRING_DATA_REDIS_SSL` | Yes | `true` |
+| `FRONTEND_URL` | Yes | `https://zorvyn-frontend-<slug>.onrender.com` |
+| `RESEND_API_KEY` | No | From [resend.com](https://resend.com) — email alerts disabled if blank |
+| `ALERT_EMAIL_FROM` | No | `onboarding@resend.dev` or your verified domain |
+| `ALERT_HIGH_VALUE_THRESHOLD` | No | INR threshold for high-value alerts (default `10000`) |
 
-### Step 2 — Deploy via Render Blueprint
+> **Important:** Do NOT wrap `JWT_SECRET` or `JWT_REFRESH_TOKEN_PEPPER` in quotes in the Render dashboard. The values are base64-decoded automatically.
 
-The `render.yaml` at the repo root defines all three services. Push the repo to GitHub, then:
-
-1. Go to [render.com](https://render.com) → **New** → **Blueprint**
-2. Connect your GitHub repo
-3. Render will detect `render.yaml` and create:
-   - `zorvyn-backend` (Docker web service)
-   - `zorvyn-frontend` (Docker web service)
-   - `zorvyn-postgres` (managed PostgreSQL)
-
-### Step 3 — Set Environment Variables
-
-After the blueprint creates the services, set these manually in the Render dashboard:
-
-**zorvyn-backend** → Environment:
-
-| Key | Value |
-|---|---|
-| `SPRING_DATA_REDIS_URL` | `rediss://default:<password>@<host>.upstash.io:6379` |
-| `SPRING_DATA_REDIS_SSL` | `true` |
-| `JWT_SECRET` | `openssl rand -base64 32` |
-| `JWT_REFRESH_TOKEN_PEPPER` | `openssl rand -base64 32` |
-| `FRONTEND_URL` | `https://zorvyn-frontend-<slug>.onrender.com` |
-| `SPRING_DATASOURCE_URL` | Use the **external** Postgres URL from Render (see note below) |
-| `MAIL_USERNAME` | Gmail address or SES SMTP user (optional — alerts disabled if blank) |
-| `MAIL_PASSWORD` | Gmail app password or SES SMTP password |
-| `ALERT_EMAIL_FROM` | Sender address e.g. `noreply@yourdomain.com` |
-| `ALERT_HIGH_VALUE_THRESHOLD` | Amount in INR above which a high-value alert fires (default `10000`) |
-
-> **Important:** Render's `connectionString` property injects the internal hostname (`dpg-xxx`), which is only reachable from services in the same region. If your backend is in a different region than the Postgres instance, override `SPRING_DATASOURCE_URL` manually with the **External Database URL** from the Postgres service's Connect tab (the one ending in `.singapore-postgres.render.com`).
-
-**zorvyn-frontend** → Environment:
+### Environment Variables — `zorvyn-frontend`
 
 | Key | Value |
 |---|---|
 | `VITE_API_URL` | `https://zorvyn-backend-<slug>.onrender.com` |
 
-> After setting `VITE_API_URL`, trigger a **Manual Deploy** on the frontend — Vite bakes this value in at build time, so a redeploy is required.
+> After setting `VITE_API_URL`, trigger a **Manual Deploy** on the frontend — Vite bakes this value in at build time.
 
-### Step 4 — Fix Admin Password (first deploy only)
-
-Flyway seeds the admin user on first startup. If the password hash doesn't match, run this against your Postgres external URL:
+### Database Reset (clean slate)
 
 ```bash
-# Linux/macOS
-PGPASSWORD=<db-password> psql -h <external-host> -U <db-user> <db-name> -c \
-  "UPDATE users SET password_hash = '\$2a\$10\$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO1GRe/0lzO' WHERE email = 'admin@finance.com';"
-
-# Windows (PowerShell)
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" "postgresql://<user>:<password>@<external-host>:5432/<db>" -c "UPDATE users SET password_hash = '$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO1GRe/0lzO' WHERE email = 'admin@finance.com';"
+PGPASSWORD=<password> psql -h <external-host> -U <user> <dbname> -c \
+  "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 ```
 
-Or use the **PSQL Command** button in the Render Postgres dashboard (browser-based shell, no installation needed).
-
-### render.yaml Reference
-
-```yaml
-services:
-  - type: web
-    name: zorvyn-backend
-    runtime: docker
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
-    plan: free
-    envVars:
-      - key: SPRING_DATASOURCE_URL
-        fromDatabase:
-          name: zorvyn-postgres
-          property: connectionString
-      - key: SPRING_DATASOURCE_USERNAME
-        fromDatabase:
-          name: zorvyn-postgres
-          property: user
-      - key: SPRING_DATASOURCE_PASSWORD
-        fromDatabase:
-          name: zorvyn-postgres
-          property: password
-      - key: SPRING_DATA_REDIS_URL
-        sync: false          # set manually from Upstash (rediss://...)
-      - key: SPRING_DATA_REDIS_SSL
-        value: "true"
-      - key: JWT_SECRET
-        sync: false          # openssl rand -base64 32
-      - key: JWT_REFRESH_TOKEN_PEPPER
-        sync: false          # openssl rand -base64 32
-      - key: FRONTEND_URL
-        sync: false          # set after frontend deploys
-      - key: MAIL_USERNAME
-        sync: false          # optional — alerts disabled if blank
-      - key: MAIL_PASSWORD
-        sync: false
-      - key: ALERT_EMAIL_FROM
-        sync: false
-      - key: ALERT_HIGH_VALUE_THRESHOLD
-        value: "10000"
-
-  - type: web
-    name: zorvyn-frontend
-    runtime: docker
-    rootDir: frontend
-    dockerfilePath: ./Dockerfile
-    plan: free
-    envVars:
-      - key: VITE_API_URL
-        sync: false          # set to https://zorvyn-backend-<slug>.onrender.com
-
-databases:
-  - name: zorvyn-postgres
-    plan: free
-    databaseName: financedb
-```
+Then trigger a **Manual Deploy** on `zorvyn-backend`. Flyway re-runs all 4 migrations automatically.
 
 ---
 
-## 4. How the Application Works — Full Walkthrough
+## 4. How the Application Works
 
 ### 4.1 Authentication Flow
 
-When a user calls `POST /api/v1/auth/login`:
-1. `AuthController` receives the request and delegates to `AuthServiceImpl`
-2. `AuthServiceImpl` calls Spring's `AuthenticationManager`, which internally calls `UserDetailsServiceImpl`
-3. `UserDetailsServiceImpl` loads the user from PostgreSQL, checks `is_active`, and builds a `UserDetails` object with `ROLE_` prefixed authorities
-4. If authentication passes, an **access token** (JWT, 15 min TTL) and a **refresh token** (UUID, 7 day TTL) are issued
-5. The refresh token is SHA-256 hashed with a pepper and stored in the `refresh_tokens` table — never stored in plaintext
-6. On every `POST /auth/refresh`, the old token is revoked and a new pair is issued (rotation prevents replay attacks)
+`POST /api/v1/auth/login`:
+1. `AuthController` delegates to `AuthServiceImpl`
+2. Spring's `AuthenticationManager` calls `UserDetailsServiceImpl`, which loads the user from PostgreSQL and checks `is_active`
+3. Access token (JWT, 15 min TTL) and refresh token (UUID, 7 day TTL) are issued
+4. Refresh token is SHA-256 hashed with a pepper and stored in `refresh_tokens` — never plaintext
+5. On `POST /auth/refresh`, old token is revoked and a new pair issued (rotation prevents replay attacks)
 
-Every subsequent request passes through `JwtAuthFilter`, which:
-- Extracts the Bearer token from the `Authorization` header
-- Validates signature and expiry using `JwtUtils`
-- Sets the `SecurityContext` so `@PreAuthorize` and `@AuthenticationPrincipal` work downstream
+Every request passes through `JwtAuthFilter`:
+- Extracts Bearer token from `Authorization` header (or `?token=` query param for SSE)
+- JWT secret is base64-decoded automatically, with quote-stripping for env var safety
+- Sets `SecurityContext` so `@PreAuthorize` works downstream
 
 ### 4.2 Role-Based Access Control
 
-Three roles exist: `VIEWER`, `ANALYST`, `ADMIN`.
+Three roles: `VIEWER`, `ANALYST`, `ADMIN`.
 
-- Role checks are enforced at the **service layer** via `@PreAuthorize`, not just controllers
-- New users registered via `/auth/register` get `VIEWER` by default
-- Admins can upgrade roles via `PUT /api/v1/users/{id}`
+- Role checks enforced at **controller layer** via `@PreAuthorize` for read endpoints
+- Write operations additionally secured at **service layer** via `@PreAuthorize`
+- Filter chain uses `.anyRequest().authenticated()` — no role rules in the filter chain to avoid conflicts
 
 | Action | Minimum Role |
 |---|---|
-| Read transactions, dashboard, export | VIEWER |
+| Read transactions, dashboard, export, forecast, merchants, budgets | VIEWER |
 | Create, update transactions, bulk import | ANALYST |
 | Delete, restore, manage users, budgets, categories | ADMIN |
 
 ### 4.3 Transaction Lifecycle
 
-When `POST /api/v1/transactions` is called:
-
-1. **Idempotency check** — duplicate `Idempotency-Key` returns the original response
+`POST /api/v1/transactions`:
+1. Idempotency check — duplicate `Idempotency-Key` returns original response
 2. Transaction saved to PostgreSQL
-3. **Anomaly detection** — amount > 3σ from category average adds `X-Anomaly-Warning` header
-4. **Off-hours detection** — transactions between 1am–5am set `offHours: true`
-5. **DNA fingerprinting** — SHA-256 hash of `(userId | amount | categoryId | 4-hour bucket)` flags duplicates within 5 minutes
-6. **Velocity scoring** — EMA score (0–100) comparing today's spend to 7-day rolling average, returned in `X-Velocity-Score`
-7. **Merchant tagging** — notes scanned for known merchant keywords; `MerchantTag` record saved
-8. **SSE broadcast** — new transaction pushed to all connected clients
-9. **Email alerts** — anomaly alert and high-value alert sent asynchronously via Spring Mail
-10. **Cache eviction** — `dashboard-summary` Redis cache evicted
-11. **Audit log** — `AuditAspect` asynchronously writes an `AuditLog` record
+3. Anomaly detection — amount > 3σ from category average adds `X-Anomaly-Warning` header
+4. Off-hours detection — transactions between 1am–5am set `offHours: true`
+5. DNA fingerprinting — SHA-256 hash of `(userId | amount | categoryId | 4-hour bucket)` flags duplicates within 5 minutes
+6. Velocity scoring — EMA score (0–100) comparing today's spend to 7-day rolling average
+7. Merchant tagging — notes scanned for known merchant keywords
+8. SSE broadcast — new transaction pushed to all connected clients
+9. Email alerts — anomaly and high-value alerts sent via Resend (async, skipped if `RESEND_API_KEY` not set)
+10. Audit log — `AuditAspect` asynchronously writes an `AuditLog` record
 
-### 4.4 Dashboard & Caching
+### 4.4 Dashboard
 
-`GET /api/v1/dashboard/summary` returns total income, expenses, net balance, category breakdown, and 10 recent transactions. Cached in Redis with 5-minute TTL via `@Cacheable("dashboard-summary")`.
+`GET /api/v1/dashboard/summary` returns total income, expenses, net balance, category breakdown, and 10 recent transactions. All read methods use `@Transactional(readOnly=true)` to keep the Hibernate session open for lazy-loaded associations (`open-in-view: false`).
 
-### 4.5 Budget Envelopes
+### 4.5 Caching
+
+In-memory `ConcurrentMapCacheManager` is used instead of Redis serialization to eliminate `ClassCastException` and `LazyInitializationException` issues that occur when complex DTOs are serialized to/from Redis JSON. Redis connection is still used to flush stale entries on startup via `DataInitializer`.
+
+### 4.6 Budget Envelopes
 
 Admins set monthly spending limits per category via `POST /api/v1/budgets`. `BudgetService.getStatus()` calculates actual spend, percentage used, projected end-of-month spend, and flags envelopes over 80%.
 
-### 4.6 Spending Forecast
+### 4.7 Spending Forecast
 
-`GET /api/v1/forecast?days=30` uses exponential smoothing (α=0.3) on the last 30 days of daily expense data per category to project future spend.
+`GET /api/v1/forecast?days=30` uses exponential smoothing (α=0.3) on the last 30 days of daily expense data per category.
 
-### 4.7 Merchant Intelligence
+### 4.8 Merchant Intelligence
 
 `GET /api/v1/merchants/top?period=monthly` aggregates `MerchantTag` records to return top merchants by total spend.
 
-### 4.8 Velocity Scoring & Risk Profiles
+### 4.9 Velocity Scoring
 
 On every transaction creation, `VelocityService` computes a velocity score (0–100) using EMA (α=0.4). Admins view full risk profiles via `GET /api/v1/users/{id}/risk-profile`.
 
-### 4.9 Rate Limiting
+### 4.10 Rate Limiting
 
 `RateLimitFilter` uses Bucket4j's token bucket algorithm with per-user in-memory buckets:
 
@@ -285,17 +201,21 @@ On every transaction creation, `VelocityService` computes a velocity score (0–
 | ANALYST | 200 requests/minute |
 | ADMIN | 500 requests/minute |
 
-### 4.10 Transaction Simulator
+### 4.11 Transaction Simulator
 
-`TransactionSimulator` fires every **2 hours** and creates a realistic random transaction for a random active user, exercising the full transaction pipeline including anomaly detection, velocity scoring, merchant tagging, SSE broadcast, email alerts, and audit logging.
+`TransactionSimulator` fires every **60 seconds** and creates a realistic random transaction for a random active user, exercising the full transaction pipeline.
 
-### 4.11 Bulk Import
+### 4.12 Bulk Import
 
-`POST /api/v1/transactions/import/csv` and `/import/json` accept a multipart file upload. All rows are validated and saved inside a single `@Transactional` boundary — any validation error rolls back the entire import, ensuring no partial state is written to the database.
+`POST /api/v1/transactions/import/csv` and `/import/json` accept multipart file uploads. All rows validated and saved in a single `@Transactional` boundary — any error rolls back the entire import.
 
-### 4.12 PDF Export
+### 4.13 PDF Export
 
-`GET /api/v1/transactions/export?format=pdf&from=2025-01-01&to=2025-06-30` generates a financial statement PDF using iText 8, including an income/expense summary and a full transaction table for the requested date range.
+`GET /api/v1/transactions/export?format=pdf&from=2025-01-01&to=2025-06-30` generates a financial statement PDF using iText 8.
+
+### 4.14 Email Alerts via Resend
+
+Anomaly and high-value transaction alerts are sent via the [Resend](https://resend.com) Java SDK. Alerts are `@Async` and silently skipped when `RESEND_API_KEY` is not configured — no startup failure.
 
 ---
 
@@ -306,21 +226,14 @@ On every transaction creation, `VelocityService` computes a velocity score (0–
 ```bash
 cd "path/to/Zorvyn_Backend_Assessment_Anagha_Badhe"
 
-# 1. Copy the env template and fill in your secrets
 cp .env.example .env
 # Edit .env: set JWT_SECRET and JWT_REFRESH_TOKEN_PEPPER
-# Generate values with: openssl rand -base64 32
+# Generate: openssl rand -base64 32
 
-# 2. Start everything
 docker-compose up --build
 ```
 
 API: `http://localhost:8080` | Swagger: `http://localhost:8080/swagger-ui.html`
-
-After first startup, fix the admin password:
-```bash
-docker exec -it zorvyn_backend_assessment_anagha_badhe-postgres-1 psql -U postgres -d financedb -c "UPDATE users SET password_hash = '\$2a\$10\$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO1GRe/0lzO' WHERE email = 'admin@finance.com';"
-```
 
 ### Option B — Local (PostgreSQL + Redis already running)
 
@@ -343,14 +256,13 @@ Frontend: `http://localhost:3000`
 
 | Key | Required | Description |
 |---|---|---|
-| `JWT_SECRET` | Yes | Random string ≥ 32 chars — `openssl rand -base64 32` |
-| `JWT_REFRESH_TOKEN_PEPPER` | Yes | Random string ≥ 32 chars — `openssl rand -base64 32` |
+| `JWT_SECRET` | Yes | Base64 string ≥ 32 bytes — `openssl rand -base64 32` |
+| `JWT_REFRESH_TOKEN_PEPPER` | Yes | Base64 string ≥ 32 bytes — `openssl rand -base64 32` |
 | `SPRING_DATA_REDIS_URL` | Yes | Redis connection URL |
-| `FRONTEND_URL` | Yes | CORS allowed origin for the frontend |
-| `MAIL_USERNAME` | No | SMTP user — email alerts disabled if blank |
-| `MAIL_PASSWORD` | No | SMTP password or Gmail app password |
-| `ALERT_EMAIL_FROM` | No | Sender address for alert emails |
-| `ALERT_HIGH_VALUE_THRESHOLD` | No | INR threshold for high-value alerts (default `10000`) |
+| `FRONTEND_URL` | Yes | CORS allowed origin |
+| `RESEND_API_KEY` | No | Email alerts disabled if blank |
+| `ALERT_EMAIL_FROM` | No | Sender address (use `onboarding@resend.dev` for testing) |
+| `ALERT_HIGH_VALUE_THRESHOLD` | No | INR threshold (default `10000`) |
 
 ### Clean slate
 
@@ -376,7 +288,7 @@ Swagger UI: `https://zorvyn-backend-tyi6.onrender.com/swagger-ui/index.html`
 ### Transactions — `/api/v1/transactions`
 | Method | Endpoint | Role | Description |
 |---|---|---|---|
-| GET | `/` | VIEWER+ | List with filters |
+| GET | `/` | VIEWER+ | List with filters + pagination |
 | GET | `/{id}` | VIEWER+ | Get by ID |
 | POST | `/` | ANALYST+ | Create (supports `Idempotency-Key` header) |
 | PUT | `/{id}` | ANALYST+ | Update |
@@ -384,32 +296,32 @@ Swagger UI: `https://zorvyn-backend-tyi6.onrender.com/swagger-ui/index.html`
 | GET | `/deleted` | ADMIN | Recycle bin |
 | POST | `/{id}/restore` | ADMIN | Restore |
 | GET | `/{id}/history` | VIEWER+ | Audit history |
-| GET | `/stream` | VIEWER+ | Live SSE feed |
+| GET | `/stream` | Any | Live SSE feed (token via `?token=` query param) |
 | GET | `/export?format=csv` | VIEWER+ | Export CSV |
 | GET | `/export?format=excel` | VIEWER+ | Export Excel |
-| GET | `/export?format=pdf&from=2025-01-01&to=2025-06-30` | VIEWER+ | Export PDF financial statement |
-| POST | `/import/csv` | ANALYST+ | Bulk import from CSV (rolls back on any error) |
-| POST | `/import/json` | ANALYST+ | Bulk import from JSON array (rolls back on any error) |
+| GET | `/export?format=pdf&from=2025-01-01&to=2025-06-30` | VIEWER+ | Export PDF |
+| POST | `/import/csv` | ANALYST+ | Bulk import CSV |
+| POST | `/import/json` | ANALYST+ | Bulk import JSON |
 
 ### Categories — `/api/v1/categories`
 | Method | Endpoint | Role | Description |
 |---|---|---|---|
-| GET | `/` | VIEWER+ | List all categories |
-| POST | `/` | ADMIN | Create a category |
-| PUT | `/{id}` | ADMIN | Update a category |
-| DELETE | `/{id}` | ADMIN | Delete a category |
+| GET | `/` | VIEWER+ | List all |
+| POST | `/` | ADMIN | Create |
+| PUT | `/{id}` | ADMIN | Update |
+| DELETE | `/{id}` | ADMIN | Delete |
 
 ### Dashboard — `/api/v1/dashboard`
 | Method | Endpoint | Role | Description |
 |---|---|---|---|
-| GET | `/summary` | VIEWER+ | Income, expenses, net balance, category breakdown (cached 5 min) |
+| GET | `/summary` | VIEWER+ | Income, expenses, net balance, category breakdown |
 | GET | `/trends` | VIEWER+ | Month-by-month totals for past 12 months |
 
 ### Users — `/api/v1/users`
 | Method | Endpoint | Role | Description |
 |---|---|---|---|
 | GET | `/` | ADMIN | List all users |
-| GET | `/{id}` | ADMIN | Get user by ID |
+| GET | `/{id}` | ADMIN | Get by ID |
 | PUT | `/{id}` | ADMIN | Update name, status, or roles |
 | DELETE | `/{id}` | ADMIN | Deactivate user |
 | GET | `/{id}/risk-profile` | ADMIN | Velocity score, 24h/7d spend, risk level |
@@ -460,33 +372,35 @@ mvn test
 
 ```
 src/main/java/com/financeapi/
-├── config/       ← SecurityConfig, RedisConfig, OpenApiConfig, RateLimitFilter,
-│                   DataInitializer, DataSourceConfig, TransactionSimulator
-├── domain/       ← JPA entities: User, Role, Transaction, Category, RefreshToken,
-│                   AuditLog, Budget, TransactionDna, MerchantTag
+├── config/       ← SecurityConfig, RedisConfig, MailConfig, OpenApiConfig,
+│                   RateLimitFilter, DataInitializer, DataSourceConfig,
+│                   TransactionSimulator
+├── domain/       ← JPA entities: User, Role, Transaction, Category,
+│                   RefreshToken, AuditLog, Budget, TransactionDna, MerchantTag
 ├── repository/   ← Spring Data JPA repositories
 ├── service/      ← Service interfaces + implementations
 │   └── impl/     ← AuthServiceImpl, TransactionServiceImpl, DashboardServiceImpl,
 │                   CategoryServiceImpl, BudgetService, ForecastService,
 │                   MerchantService, VelocityService, DnaFingerprintService,
-│                   PdfExportService, EmailAlertService, BulkImportService,
+│                   PdfExportService, EmailAlertService (Resend), BulkImportService,
 │                   SseEmitterRegistry
 ├── controller/   ← AuthController, TransactionController, BulkImportController,
 │                   CategoryController, DashboardController, UserController,
 │                   BudgetController, ForecastController, MerchantController
 ├── dto/          ← Request/Response DTOs
-├── security/     ← JwtUtils, JwtAuthFilter, UserDetailsServiceImpl
+├── security/     ← JwtUtils (base64-aware), JwtAuthFilter, UserDetailsServiceImpl
 ├── exception/    ← Custom exceptions + GlobalExceptionHandler
 ├── audit/        ← AuditAspect (AOP)
 └── util/         ← TransactionSpecification
 
 src/main/resources/db/migration/
-├── V1__init_schema.sql       ← Schema + seed categories + admin user
-├── V2__novelty_features.sql  ← DNA, budgets, merchant tags, velocity
-└── V3__seed_default_users.sql← Analyst and viewer seed users
+├── V1__init_schema.sql          ← Schema + seed categories + admin user
+├── V2__novelty_features.sql     ← DNA, budgets, merchant tags, velocity
+├── V3__seed_default_users.sql   ← Analyst and viewer seed users
+└── V4__fix_users_and_roles.sql  ← Fix password hashes + role assignments
 
 frontend/          ← Vite + React frontend (Zorvyn theme)
-render.yaml        ← Render Blueprint (backend + frontend + postgres)
+render.yaml        ← Render Blueprint
 docker-compose.yml ← Local development stack
 .env.example       ← Environment variable template
 ```
@@ -495,36 +409,42 @@ docker-compose.yml ← Local development stack
 
 ## 9. Technical Decisions & Trade-offs
 
-### Framework & Language — Spring Boot 3 + Java 17
-Chosen over Node.js or Python for strict type safety and compile-time error detection — a mistyped field in a transaction calculation is caught at build time, not at runtime in production. Spring's ecosystem provides Security, Data JPA, Cache, and AOP out of the box without unvetted third-party libraries. The layered Controller → Service → Repository architecture keeps concerns separated: controllers handle only HTTP, all business rules live in services secured with `@PreAuthorize`, and repositories are pure data access.
+### Framework — Spring Boot 3 + Java 17
+Strict type safety catches errors at compile time. Spring's ecosystem provides Security, Data JPA, Cache, and AOP out of the box. The layered Controller → Service → Repository architecture keeps concerns separated.
 
 ### Database — PostgreSQL with Flyway
-Finance data is inherently relational — transactions belong to categories, users have roles, budgets reference categories. PostgreSQL's ACID compliance and constraint enforcement made it the right fit over H2. The trade-off is that reviewers need a running Postgres instance, addressed via `docker-compose.yml` for one-command local startup. Flyway ensures schema state is always reproducible and auditable.
+Finance data is relational. ACID compliance and constraint enforcement. Flyway ensures schema state is always reproducible across 4 versioned migrations. `open-in-view: false` is set to prevent lazy-loading anti-patterns — all read service methods use `@Transactional(readOnly=true)` explicitly.
 
-### Security — JWT with Refresh Token Rotation + RBAC
-Stateless JWT authentication (15-minute access tokens) with refresh token rotation rather than session-based auth. Rotation adds complexity (SHA-256 hashed tokens with a pepper stored in `refresh_tokens`, old token revoked on every refresh) but prevents replay attacks. RBAC is enforced at the service layer via `@PreAuthorize` — not just controllers — so even internal calls respect role boundaries. OAuth2/OIDC was intentionally skipped; it would add infrastructure complexity without demonstrating additional engineering judgment within this assessment's scope.
+### Security — JWT with Refresh Token Rotation
+Stateless JWT (15-minute access tokens) with refresh token rotation. SHA-256 hashed tokens with a pepper stored in `refresh_tokens`. RBAC enforced at controller layer via `@PreAuthorize` for reads, and additionally at service layer for writes. JWT secret is base64-decoded automatically with quote-stripping for env var safety.
 
-### Data Processing — SQL aggregations + Java service layer
-Dashboard aggregations (total income, expenses, category breakdowns) are pushed down to JPQL queries — summing rows in the database is orders of magnitude faster than loading them into the JVM. Complex logic — anomaly detection (3σ), velocity scoring (EMA), spending forecasts (exponential smoothing), DNA fingerprinting (SHA-256) — lives in the Java service layer where it is unit-testable with Mockito and not coupled to a SQL dialect. Redis caches the dashboard summary with a 5-minute TTL.
+### Caching — In-Memory instead of Redis
+`ConcurrentMapCacheManager` is used for application caches instead of Redis serialization. Redis with `activateDefaultTyping` caused persistent `ClassCastException` when deserializing complex DTOs (`List<TransactionResponse>`, `Map<String, BigDecimal>`) — a class of bugs that cannot be reliably fixed without removing Redis caching entirely. The Redis connection is retained solely for `flushDb()` on startup to clear any stale entries.
 
-### Error Handling & Validation
-`@RestControllerAdvice` centralises all error responses into a consistent JSON shape. `@Valid` on request DTOs catches constraint violations before they reach the service layer, returning field-level messages like `"amount: must be greater than 0"` rather than a generic 500 — making the API self-documenting for the frontend team.
+### Email — Resend SDK
+Replaced `spring-boot-starter-mail` (SMTP) with the Resend Java SDK. SMTP configuration caused startup failures when credentials were absent. Resend uses a simple HTTP API — the `EmailAlertService` is gracefully disabled when `RESEND_API_KEY` is not set, with no impact on startup or transaction creation.
+
+### Data Processing
+Dashboard aggregations pushed down to JPQL queries. Complex logic (anomaly detection, velocity scoring, forecasts, DNA fingerprinting) lives in the Java service layer where it is unit-testable. `TransactionSpecification` uses explicit `JoinType.LEFT` only when category filtering/search is needed, and sets `query.distinct(true)` only on data queries (not count queries) to avoid Hibernate 6's `SemanticException`.
 
 ---
 
 ## 10. Known Limitations
 
 - **Rate limit state is in-memory** — breaks under horizontal scaling; production fix is Bucket4j's `RedisProxyManager`
-- **Single currency** — all amounts are assumed to be in INR; no multi-currency conversion
-- **Dashboard trends computed on-the-fly** — for millions of records, a materialized view or pre-computed reporting table would be needed
-- **Merchant classification is a static dictionary** — a production system would use a merchant classification API or ML model
+- **Single currency** — all amounts assumed to be INR
+- **Dashboard computed on-the-fly** — for millions of records, a materialized view would be needed
+- **Merchant classification is a static dictionary** — production would use a merchant classification API
 - **No email verification** — registered users are immediately active
-- **Render free tier cold starts** — services spin down after 15 minutes of inactivity; first request takes 30–60 seconds
-- **Search is JPQL `LIKE`** — chosen over Elasticsearch to avoid an external cluster dependency; sufficient for this assessment's scale
+- **Render free tier cold starts** — services spin down after 15 minutes; first request takes 30–60 seconds
+- **Search is JPQL `LIKE`** — sufficient for this scale; Elasticsearch would be needed for production
 
 ---
 
 ## 11. Future Improvements
 
-- **OAuth2/OIDC** (Keycloak or Cognito) for federated identity in a multi-tenant setup
 - **Redis-backed rate limiting** via Bucket4j `RedisProxyManager` for horizontal scale
+- **OAuth2/OIDC** (Keycloak or Cognito) for federated identity
+- **Materialized views** for dashboard aggregations at scale
+- **Multi-currency support** with real-time exchange rates
+- **Email verification** on registration
