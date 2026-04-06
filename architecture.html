@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zorvyn Finance — Architecture Flow</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+    h1 { text-align: center; color: #38bdf8; margin-bottom: 32px; }
+    .diagram { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 40px; }
+    h2 { color: #7dd3fc; margin-top: 0; }
+  </style>
+</head>
+<body>
+  <h1>Zorvyn Finance — Architecture Flow Diagrams</h1>
+
+  <!-- 1. System Architecture -->
+  <div class="diagram">
+    <h2>1. System Architecture</h2>
+    <div class="mermaid">
+graph TD
+    Browser["🌐 React Frontend\n(Vite + Recharts)"]
+    API["⚙️ Spring Boot 3 API"]
+    PG[("🐘 PostgreSQL\n(Render)")]
+    Redis[("⚡ Redis\n(Upstash)")]
+    Resend["📧 Resend\n(Email API)"]
+
+    Browser -->|"HTTP / REST / SSE"| API
+    API -->|"JPA / Hibernate"| PG
+    API -->|"flushDb on startup"| Redis
+    API -->|"Async alerts"| Resend
+
+    subgraph "Spring Boot 3 API"
+        JwtFilter["JwtAuthFilter"]
+        RateLimit["RateLimitFilter\n(Bucket4j)"]
+        Controller["Controllers\n(@PreAuthorize)"]
+        Service["Services\n(@PreAuthorize writes)"]
+        Repo["Repositories\n(Spring Data JPA)"]
+        AOP["AuditAspect\n(AOP)"]
+        Cache["ConcurrentMapCacheManager"]
+
+        JwtFilter --> RateLimit --> Controller --> Service --> Repo
+        Service --> AOP
+        Service --> Cache
+    end
+    </div>
+  </div>
+
+  <!-- 2. Authentication Flow -->
+  <div class="diagram">
+    <h2>2. Authentication Flow</h2>
+    <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant F as JwtAuthFilter
+    participant AC as AuthController
+    participant AS as AuthServiceImpl
+    participant UDS as UserDetailsServiceImpl
+    participant DB as PostgreSQL
+
+    C->>AC: POST /auth/login {email, password}
+    AC->>AS: login(request)
+    AS->>UDS: loadUserByUsername(email)
+    UDS->>DB: SELECT user WHERE email & is_active
+    DB-->>UDS: User entity
+    UDS-->>AS: UserDetails
+    AS->>AS: Verify password (BCrypt)
+    AS->>DB: INSERT refresh_token (SHA-256 + pepper)
+    AS-->>C: {accessToken (15min), refreshToken (7d)}
+
+    Note over C,F: Subsequent requests
+    C->>F: Authorization: Bearer {accessToken}
+    F->>F: Decode JWT, set SecurityContext
+    F-->>C: 401 if invalid/expired
+
+    C->>AC: POST /auth/refresh {refreshToken}
+    AC->>AS: refresh(token)
+    AS->>DB: Revoke old token, issue new pair
+    AS-->>C: {new accessToken, new refreshToken}
+    </div>
+  </div>
+
+  <!-- 3. Transaction Lifecycle -->
+  <div class="diagram">
+    <h2>3. Transaction Creation Pipeline</h2>
+    <div class="mermaid">
+flowchart TD
+    A["POST /api/v1/transactions"] --> B{"Idempotency\nKey exists?"}
+    B -->|Yes| C["Return original response"]
+    B -->|No| D["Save to PostgreSQL"]
+    D --> E["Anomaly Detection\n(amount > 3σ → X-Anomaly-Warning header)"]
+    E --> F["Off-Hours Detection\n(1am–5am → offHours: true)"]
+    F --> G["DNA Fingerprinting\n(SHA-256 hash, 5-min dedup window)"]
+    G --> H["Velocity Scoring\n(EMA 0–100, 7-day rolling avg)"]
+    H --> I["Merchant Tagging\n(keyword scan on notes)"]
+    I --> J["SSE Broadcast\n(push to all connected clients)"]
+    J --> K["Email Alerts via Resend\n(async, skipped if no API key)"]
+    K --> L["AuditAspect logs AuditLog\n(async)"]
+    L --> M["Return TransactionResponse\n+ response headers"]
+    </div>
+  </div>
+
+  <!-- 4. RBAC -->
+  <div class="diagram">
+    <h2>4. Role-Based Access Control</h2>
+    <div class="mermaid">
+graph LR
+    VIEWER["👁️ VIEWER"]
+    ANALYST["📊 ANALYST"]
+    ADMIN["🔑 ADMIN"]
+
+    VIEWER -->|inherits| ANALYST
+    ANALYST -->|inherits| ADMIN
+
+    subgraph "VIEWER can"
+        R1["GET transactions, dashboard"]
+        R2["Export CSV / Excel / PDF"]
+        R3["Forecast, Merchants, Budgets status"]
+    end
+
+    subgraph "ANALYST can"
+        R4["POST / PUT transactions"]
+        R5["Bulk import CSV / JSON"]
+    end
+
+    subgraph "ADMIN can"
+        R6["DELETE / restore transactions"]
+        R7["Manage users & roles"]
+        R8["Create / update budgets & categories"]
+        R9["View risk profiles"]
+    end
+
+    VIEWER --- R1 & R2 & R3
+    ANALYST --- R4 & R5
+    ADMIN --- R6 & R7 & R8 & R9
+    </div>
+  </div>
+
+  <!-- 5. Layered Architecture -->
+  <div class="diagram">
+    <h2>5. Layered Architecture</h2>
+    <div class="mermaid">
+graph TD
+    subgraph "HTTP Layer"
+        CTL["Controllers\n• AuthController\n• TransactionController\n• DashboardController\n• UserController\n• BudgetController\n• ForecastController\n• MerchantController"]
+    end
+
+    subgraph "Business Layer"
+        SVC["Services\n• AuthServiceImpl\n• TransactionServiceImpl\n• DashboardServiceImpl\n• BudgetService\n• ForecastService\n• VelocityService\n• DnaFingerprintService\n• MerchantService\n• PdfExportService\n• EmailAlertService\n• BulkImportService"]
+    end
+
+    subgraph "Data Layer"
+        REPO["Repositories\n(Spring Data JPA)"]
+        DB[("PostgreSQL\nFlyway migrations V1–V4")]
+    end
+
+    subgraph "Cross-Cutting"
+        SEC["Security\nJwtUtils · JwtAuthFilter\nUserDetailsServiceImpl"]
+        AOP2["AuditAspect (AOP)"]
+        RATE["RateLimitFilter (Bucket4j)"]
+        CACHE2["ConcurrentMapCacheManager"]
+    end
+
+    CTL --> SVC --> REPO --> DB
+    SEC --> CTL
+    RATE --> CTL
+    AOP2 -.->|"async audit"| SVC
+    CACHE2 -.->|"@Cacheable"| SVC
+    </div>
+  </div>
+
+  <script>mermaid.initialize({ startOnLoad: true, theme: "dark" });</script>
+</body>
+</html>
